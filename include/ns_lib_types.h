@@ -209,6 +209,61 @@ typedef struct
     uint64_t timestamp_us; /**< Monotonic sample time in microseconds (same domain as @ref ns_motion_imu_sample_s). */
 } ns_quaternion_s;
 
+/** @brief Byte-level Switch input payload (buttons + unpacked sticks). */
+typedef struct
+{
+    union
+    {
+        struct
+        {
+
+            uint8_t y       : 1; // Y Button (C-Up N64)
+            uint8_t x       : 1; // X Button (C-Left N64)
+            uint8_t b       : 1; // B Button
+            uint8_t a       : 1; // A Button
+            uint8_t r_sr    : 1; // Right Joycon SR
+            uint8_t r_sl    : 1; // Right Joycon SL
+            uint8_t r       : 1; // R Button
+            uint8_t zr      : 1; // ZR Button (C-Down N64)
+        };
+        uint8_t right_buttons;
+    };
+    union
+    {
+        struct
+        {
+            uint8_t minus     : 1; // Minus Button (C-Right N64 / Select)
+            uint8_t plus      : 1; // Plus Button (Start)
+            uint8_t r_js      : 1; // Right Joystick Button
+            uint8_t l_js      : 1; // Left Joystick Button
+            uint8_t home      : 1; // Home Button
+            uint8_t capture   : 1; // Capture Button
+            uint8_t none      : 1;
+            uint8_t charge_grip : 1;
+        };
+        uint8_t shared_buttons;
+    };
+    union
+    {
+        struct
+        {
+            uint8_t down    : 1; // Down Button
+            uint8_t up      : 1; // Up Button
+            uint8_t right   : 1; // Right Button
+            uint8_t left    : 1; // Left Button
+            uint8_t l_sr    : 1; // Left Joycon SR
+            uint8_t l_sl    : 1; // Left Joycon SL
+            uint8_t l       : 1; // L Button
+            uint8_t zl      : 1; // ZL Button (Z N64)
+
+        };
+        uint8_t left_buttons;
+    };
+    uint16_t ls_x; // Left Joystick X Axis (2048 Center)
+    uint16_t ls_y; // Left Joystick Y Axis (2048 Center)
+    uint16_t rs_x; // Right Joystick X Axis (2048 Center)
+    uint16_t rs_y; // Right Joystick Y Axis (2048 Center)
+} ns_inputdata_s;
 
 /** @brief Byte-level 0x30 report input payload (buttons + packed sticks). */
 typedef struct
@@ -217,20 +272,15 @@ typedef struct
     {
         struct
         {
-            // Y and C-Up (N64)
-            uint8_t b_y       : 1;
 
-            // X and C-Left (N64)
-            uint8_t b_x       : 1;
-
-            uint8_t b_b       : 1;
-            uint8_t b_a       : 1;
-            uint8_t t_r_sr    : 1;
-            uint8_t t_r_sl    : 1;
-            uint8_t t_r       : 1;
-
-            // ZR and C-Down (N64)
-            uint8_t t_zr      : 1;
+            uint8_t y       : 1; // Y Button (C-Up N64)
+            uint8_t x       : 1; // X Button (C-Left N64)
+            uint8_t b       : 1; // B Button
+            uint8_t a       : 1; // A Button
+            uint8_t r_sr    : 1; // Right Joycon SR
+            uint8_t r_sl    : 1; // Right Joycon SL
+            uint8_t r       : 1; // R Button
+            uint8_t zr      : 1; // ZR Button (C-Down N64)
         };
         uint8_t right_buttons;
     };
@@ -238,18 +288,14 @@ typedef struct
     {
         struct
         {
-            // Minus and C-Right (N64)
-            uint8_t b_minus     : 1;
-
-            // Plus and Start
-            uint8_t b_plus      : 1;
-
-            uint8_t sb_right    : 1;
-            uint8_t sb_left     : 1;
-            uint8_t b_home      : 1;
-            uint8_t b_capture   : 1;
-            uint8_t none        : 1;
-            uint8_t charge_grip_active : 1;
+            uint8_t minus     : 1; // Minus Button (C-Right N64 / Select)
+            uint8_t plus      : 1; // Plus Button (Start)
+            uint8_t r_js      : 1; // Right Joystick Button
+            uint8_t l_js      : 1; // Left Joystick Button
+            uint8_t home      : 1; // Home Button
+            uint8_t capture   : 1; // Capture Button
+            uint8_t none      : 1;
+            uint8_t charge_grip : 1;
         };
         uint8_t shared_buttons;
     };
@@ -257,23 +303,21 @@ typedef struct
     {
         struct
         {
-            uint8_t d_down    : 1;
-            uint8_t d_up      : 1;
-            uint8_t d_right   : 1;
-            uint8_t d_left    : 1;
-            uint8_t t_l_sr    : 1;
-            uint8_t t_l_sl    : 1;
-            uint8_t t_l       : 1;
-
-            // ZL and Z (N64)
-            uint8_t t_zl      : 1;
+            uint8_t down    : 1; // Down Button
+            uint8_t up      : 1; // Up Button
+            uint8_t right   : 1; // Right Button
+            uint8_t left    : 1; // Left Button
+            uint8_t l_sr    : 1; // Left Joycon SR
+            uint8_t l_sl    : 1; // Left Joycon SL
+            uint8_t l       : 1; // L Button
+            uint8_t zl      : 1; // ZL Button (Z N64)
 
         };
         uint8_t left_buttons;
     };
     uint8_t left_stick[3];
     uint8_t right_stick[3];
-} ns_inputdata_s;
+} ns_inputdata_packed_s;
 
 #ifdef __cplusplus
 }

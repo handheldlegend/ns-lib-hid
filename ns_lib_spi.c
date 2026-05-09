@@ -104,10 +104,7 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
         uint8_t *analog_cal = ns_analog_calibration_data();
 
         /* Factory configuration and calibration */
-        uint8_t factory_id_hi;
-        uint8_t factory_id_lo;
-        uint8_t factory_color_byte;
-        uint8_t factory_snes_region_byte;
+        uint8_t factory_id_hi, factory_id_lo, factory_color_byte, factory_snes_region_byte;
         ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
                                        &factory_snes_region_byte);
 

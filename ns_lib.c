@@ -76,8 +76,10 @@ __attribute__((weak)) void ns_get_inputdata_cb(ns_inputdata_s *out)
         return;
     }
     memset(out, 0, sizeof(*out));
-    ns_analog_pack_xy12(2048u, 2048u, out->left_stick);
-    ns_analog_pack_xy12(2048u, 2048u, out->right_stick);
+    out->ls_x = 2048;
+    out->ls_y = 2048;
+    out->rs_x = 2048;
+    out->rs_y = 2048;
 }
 
 __attribute__((weak)) void ns_linkkey_get_cb(uint8_t *out)
