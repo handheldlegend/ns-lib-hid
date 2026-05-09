@@ -58,21 +58,9 @@ extern uint8_t ns_lib_protocol_command_report_id;
 
 extern uint8_t ns_lib_protocol_ltk[16];
 
-void ns_protocol_generate_inputreport(uint8_t *report_id, uint8_t *out);
+bool ns_protocol_generate_inputreport(uint8_t out[64]);
 
-void ns_lib_protocol_generate_reply(const uint8_t *in, uint8_t *report_id, uint8_t *out);
-uint8_t ns_lib_protocol_enqueue_host_input(const uint8_t *in, uint16_t in_len);
-
-/**
- * @brief Queue one incoming host packet (OUT report) for FIFO processing.
- *
- * Processing is deferred until @ref ns_lib_protocol_generate_inputreport runs from the main loop.
- * This wrapper preserves compatibility and now aliases @ref ns_lib_protocol_enqueue_host_input.
- *
- * @return 1 when packet enqueued, else 0 (invalid args or queue full).
- */
-uint8_t ns_lib_protocol_process_host_input(const uint8_t *in, uint16_t in_len, uint8_t *out_report_id,
-                                           uint8_t *out);
+void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len);
 
 #ifdef __cplusplus
 }

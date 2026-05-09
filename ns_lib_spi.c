@@ -23,70 +23,6 @@
 
 #include <string.h>
 
-/**
- * SPI factory stage-1/2 bytes from ns_devtype_t: 0x6012/0x6013 ID, 0x601B color flag, 0x605C SNES region.
- */
-static void _ns_spi_factory_bytes_from_type(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
-                                           uint8_t *snes_region_byte)
-{
-    *color_byte = 0x01;
-    *snes_region_byte = 0x00;
-
-    switch (t)
-    {
-    case NS_DEVTYPE_JOYCON_R:
-        *id_hi = 0x01;
-        *id_lo = 0x02;
-        return;
-    case NS_DEVTYPE_JOYCON_L:
-        *id_hi = 0x02;
-        *id_lo = 0x02;
-        return;
-    case NS_DEVTYPE_N64:
-        *id_hi = 0x0C;
-        *id_lo = 0x11;
-        return;
-    case NS_DEVTYPE_SNES_NA:
-        *id_hi = 0x0B;
-        *id_lo = 0x02;
-        *color_byte = 0x02;
-        *snes_region_byte = 0x00;
-        return;
-    case NS_DEVTYPE_SNES_JP:
-        *id_hi = 0x0B;
-        *id_lo = 0x02;
-        *color_byte = 0x02;
-        *snes_region_byte = 0x01;
-        return;
-    case NS_DEVTYPE_SNES_EU:
-        *id_hi = 0x0B;
-        *id_lo = 0x02;
-        *color_byte = 0x02;
-        *snes_region_byte = 0x02;
-        return;
-    case NS_DEVTYPE_FAMI:
-        *id_hi = 0x07;
-        *id_lo = 0x02;
-        return;
-    case NS_DEVTYPE_NES:
-        *id_hi = 0x09;
-        *id_lo = 0x02;
-        return;
-    case NS_DEVTYPE_MEGADRIVE:
-    case NS_DEVTYPE_GENESIS:
-        *id_hi = 0x0D;
-        *id_lo = 0x02;
-        return;
-    case NS_DEVTYPE_PROCON:
-    case NS_DEVTYPE_UNDEFINED:
-    default:
-        *id_hi = 0x03;
-        *id_lo = 0x02;
-        return;
-    }
-}
-
-
 uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
 {
     /*
@@ -172,7 +108,7 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
         uint8_t factory_id_lo;
         uint8_t factory_color_byte;
         uint8_t factory_snes_region_byte;
-        _ns_spi_factory_bytes_from_type(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
+        ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
                                        &factory_snes_region_byte);
 
         switch (address)

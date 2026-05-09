@@ -28,97 +28,79 @@
 #include <string.h>
 
 /* Common report/packet offsets */
-#define NS_LIB_PROTOCOL_IDX_TIMER 0u
-#define NS_LIB_PROTOCOL_IDX_BATTCONN 1u
-#define NS_LIB_PROTOCOL_IDX_SUBCMD 10u
-#define NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0 11u
-#define NS_LIB_PROTOCOL_IDX_SUBCMD_ARG1 12u
-#define NS_LIB_PROTOCOL_IDX_ACK 12u
-#define NS_LIB_PROTOCOL_IDX_ACK_SUBCMD 13u
-#define NS_LIB_PROTOCOL_IDX_PAYLOAD 14u
-#define NS_LIB_PROTOCOL_IDX_PAYLOAD2 15u
-#define NS_LIB_PROTOCOL_IDX_IMU_DATA_START 12u
-#define NS_LIB_PROTOCOL_IDX_INFO_CODE 1u
+#define NS_PROTOCOL_IN_IDX_REPORT_ID 0u
+#define NS_PROTOCOL_IN_IDX_TIMER 1u
+#define NS_PROTOCOL_IN_IDX_BATTCONN 2u
+#define NS_PROTOCOL_IN_IDX_BUTTONS 3u
+#define NS_PROTOCOL_IN_IDX_STICKS 6u
 
-#define NS_LIB_PROTOCOL_IDX_INFO_PAYLOAD 0u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC0 3u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC1 4u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC2 5u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC3 6u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC4 7u
-#define NS_LIB_PROTOCOL_IDX_INFO_MAC5 8u
+#define NS_PROTOCOL_IN_IDX_VIBRATOR 12u
+#define NS_PROTOCOL_IN_IDX_ACK 13u
+#define NS_PROTOCOL_IN_IDX_ACK_SUBCMD 14u
+#define NS_PROTOCOL_IN_IDX_PAYLOAD 15u
 
-#define NS_LIB_PROTOCOL_REPORT_ID_30 0x30u
+#define NS_PROTOCOL_IDX_IMU_DATA_START 13u
+
+#define NS_PROTOCOL_OUT_IDX_REPORT_ID 0u
+#define NS_PROTOCOL_OUT_IDX_INFO 1u
+#define NS_PROTOCOL_OUT_IDX_PACKETNUM 1u
+#define NS_PROTOCOL_OUT_HAPTIC_DATA_START 2u
+#define NS_PROTOCOL_OUT_IDX_SUBCMD 10u
+#define NS_PROTOCOL_OUT_IDX_SUBCMD_ARG 11u
+
+#define NS_LIB_PROTOCOL_IN_REPORT_ID_30 0x30u
 #define NS_LIB_PROTOCOL_REPLY_ID_21 0x21u
 #define NS_LIB_PROTOCOL_REPLY_ID_81 0x81u
 #define NS_LIB_PROTOCOL_MAX_PACKET_BYTES 64u
 #define NS_LIB_PROTOCOL_CMD_FIFO_DEPTH 3u
 
-uint8_t ns_lib_protocol_in_command_buffer[64] = {0};
-uint8_t ns_lib_protocol_in_report_id = 0x00;
-uint16_t ns_lib_protocol_in_command_len = 64;
-uint8_t ns_lib_protocol_in_command_got = 0;
-
-uint8_t ns_lib_protocol_reporting_mode = NS_LIB_PROTOCOL_REPORT_ID_30;
-uint8_t ns_lib_protocol_imu_mode = 0x00;
-
-uint8_t ns_lib_protocol_command_buffer[64] = {0};
-uint8_t ns_lib_protocol_command_report_id = 0x00;
-
-uint8_t ns_lib_protocol_ltk[16] = {0};
 typedef struct
 {
     uint16_t len;
     uint8_t data[NS_LIB_PROTOCOL_MAX_PACKET_BYTES];
 } ns_lib_protocol_pending_packet_s;
 
+typedef struct
+{
+    uint8_t imu_mode;
+    bool init_sent;
+    uint8_t reporting_mode;
+    uint8_t link_key[16];
+} ns_lib_protocol_sm_s;
+
+static ns_lib_protocol_sm_s _protocol_sm = {.imu_mode = NS_IMU_OFF, .init_sent = false, .reporting_mode = NS_LIB_PROTOCOL_IN_REPORT_ID_30};
+
 static ns_lib_protocol_pending_packet_s s_ns_lib_protocol_queue[NS_LIB_PROTOCOL_CMD_FIFO_DEPTH];
 static uint8_t s_ns_lib_protocol_queue_head = 0u;
 static uint8_t s_ns_lib_protocol_queue_tail = 0u;
 static uint8_t s_ns_lib_protocol_queue_count = 0u;
 
-static int _ns_lib_protocol_mac_is_nonzero(const uint8_t mac[6])
-{
-    for (int i = 0; i < 6; i++)
-    {
-        if (mac[i] != 0u)
-        {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static void _ns_lib_protocol_get_device_mac(uint8_t mac[6])
+static void _ns_protocol_get_device_mac(uint8_t mac[6])
 {
     ns_device_config_s cfg = {0};
     ns_device_config_get(&cfg);
     memcpy(mac, cfg.device_mac, 6);
 }
 
-static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, uint8_t *out);
-static void _ns_protocol_generate_standard_inputreport(uint8_t *report_id, uint8_t *out);
-static uint8_t _ns_protocol_outputqueue_pop(ns_lib_protocol_pending_packet_s *out_packet);
-
-static void _generate_ltk(void)
+static void _ns_protocol_generate_ltk(void)
 {
     for (uint8_t i = 0; i < 16; i++)
     {
-        ns_lib_protocol_ltk[i] = ns_get_random_u8();
+        _protocol_sm.link_key[i] = ns_get_random_u8();
     }
 }
 
 static void _ns_protocol_set_ack(uint8_t ack, uint8_t *target)
 {
-    target[NS_LIB_PROTOCOL_IDX_ACK] = ack;
+    target[NS_PROTOCOL_IN_IDX_ACK] = ack;
 }
 
-static void _ns_lib_protocol_set_command(uint8_t command, uint8_t *target)
+static void _ns_protocol_set_command(uint8_t command, uint8_t *target)
 {
-    target[NS_LIB_PROTOCOL_IDX_ACK_SUBCMD] = command;
+    target[NS_PROTOCOL_IN_IDX_ACK_SUBCMD] = command;
 }
 
-static void _ns_lib_protocol_set_timer(uint8_t *target)
+static void _ns_protocol_set_timer(uint8_t *target)
 {
     static uint64_t this_ms = 0;
     ns_get_time_ms(&this_ms);
@@ -129,29 +111,39 @@ static void _ns_lib_protocol_set_timer(uint8_t *target)
     {
         ns_lib_protocol_timer %= 0xFF;
     }
-    target[NS_LIB_PROTOCOL_IDX_TIMER] = (uint8_t)ns_lib_protocol_timer;
+    target[NS_PROTOCOL_IN_IDX_TIMER] = (uint8_t)ns_lib_protocol_timer;
 }
 
-static void _ns_lib_protocol_set_battconn(uint8_t *target)
+static void _ns_protocol_set_battconn(uint8_t *target)
 {
     ns_powerstatus_s ps = {0};
     ns_get_powerstatus_cb(&ps);
-    target[NS_LIB_PROTOCOL_IDX_BATTCONN] = ps.val;
+    target[NS_PROTOCOL_IN_IDX_BATTCONN] = ps.val;
 }
 
 static void _ns_protocol_set_devinfo(uint8_t *target)
 {
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 0] = 0x04;
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 1] = 0x33;
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 2] = 0x03;
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 3] = 0x02;
+    ns_device_config_s cfg = {0};
+    ns_device_config_get(&cfg);
 
-    uint8_t mac[6];
-    _ns_lib_protocol_get_device_mac(mac);
-    memcpy(&target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 4], mac, 6);
+    uint8_t fw_hi, fw_lo;
+    ns_device_fw_version(&fw_hi, &fw_lo);
 
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 10] = 0x00;
-    target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 11] = 0x02;
+    /* Factory configuration and calibration */
+    uint8_t factory_id_hi, factory_id_lo, factory_color_byte, factory_snes_region_byte;
+    ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
+                                    &factory_snes_region_byte);
+
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 0] = fw_hi;
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = fw_lo;
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = factory_id_hi;
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = factory_id_lo;
+
+    memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4], cfg.device_mac, 6);
+
+    // I don't know what these do :)
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 10] = 0x01;
+    target[NS_PROTOCOL_IN_IDX_PAYLOAD + 11] = 0x02;
 }
 
 static void _ns_protocol_set_subtriggertime(uint16_t time_10_ms, uint8_t *target)
@@ -161,89 +153,134 @@ static void _ns_protocol_set_subtriggertime(uint16_t time_10_ms, uint8_t *target
 
     for (uint8_t i = 0; i < 14; i += 2)
     {
-        target[NS_LIB_PROTOCOL_IDX_PAYLOAD + i] = upper_ms;
-        target[NS_LIB_PROTOCOL_IDX_PAYLOAD2 + i] = lower_ms;
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + i] = upper_ms;
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + i] = lower_ms;
     }
 }
 
-static void _ns_lib_protocol_info_set_mac(uint8_t *target)
+static void _ns_protocol_info_set_mac(uint8_t *target)
 {
-    target[NS_LIB_PROTOCOL_IDX_INFO_PAYLOAD + 0] = 0x01;
-    target[NS_LIB_PROTOCOL_IDX_INFO_PAYLOAD + 1] = 0x00;
-    target[NS_LIB_PROTOCOL_IDX_INFO_PAYLOAD + 2] = 0x03;
+    target[1] = 1u;
+    target[0] = 0u;
+    target[3] = 3u;
 
     uint8_t mac[6];
-    _ns_lib_protocol_get_device_mac(mac);
+    _ns_protocol_get_device_mac(mac);
 
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC0] = mac[5];
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC1] = mac[4];
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC2] = mac[3];
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC3] = mac[2];
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC4] = mac[1];
-    target[NS_LIB_PROTOCOL_IDX_INFO_MAC5] = mac[0];
+    target[4] = mac[5];
+    target[5] = mac[4];
+    target[6] = mac[3];
+    target[7] = mac[2];
+    target[8] = mac[1];
+    target[9] = mac[0];
 }
 
 static void _ns_protocol_info_handler(uint8_t info_code, uint8_t *target)
 {
     switch (info_code)
     {
+    // First stage, device info request
     case 0x01:
-        _ns_lib_protocol_info_set_mac(target);
+        _ns_protocol_info_set_mac(target);
         break;
-    default:
-        target[NS_LIB_PROTOCOL_IDX_INFO_PAYLOAD] = info_code;
+
+    // Host is checking if gamepad is ready/fully initialized
+    case 0x02:
+    // Seems to be sent by Steam/Windows
+    case 0x03:
+        // Mirror back the info code
+        target[1] = info_code;
+        break;
+    
+    // We do not reply to 0x04
+    case 0x04:
         break;
     }
 }
 
-static void _ns_protocol_pairing_set(uint8_t phase, const uint8_t *host_address, uint8_t *target)
+static void _ns_protocol_pairing_set(uint8_t *in, uint8_t *target)
 {
+    // This is a const value that is used in the pairing response data
     const uint8_t pro_controller_string[24] = {0x00, 0x25, 0x08, 0x50, 0x72, 0x6F, 0x20, 0x43, 0x6F,
                                                 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x6C, 0x65, 0x72, 0x00,
                                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68};
-    (void)host_address;
+
+    static uint8_t host_addr[6] = {0};
+
+    uint8_t phase = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
 
     switch (phase)
     {
-    default:
+    // Pairing process initialized
     case 1:
         _ns_protocol_set_ack(0x81, target);
-        target[NS_LIB_PROTOCOL_IDX_PAYLOAD] = 1;
-        {
-            uint8_t mac[6];
-            _ns_lib_protocol_get_device_mac(mac);
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 1] = mac[5];
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 2] = mac[4];
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 3] = mac[3];
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 4] = mac[2];
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 5] = mac[1];
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 6] = mac[0];
-        }
-        memcpy(&target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 7], pro_controller_string, 24);
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 1;
+
+        // Extract HOST address
+        host_addr[0] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+6];
+        host_addr[1] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+5];
+        host_addr[2] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+4];
+        host_addr[3] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+3];
+        host_addr[4] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+2];
+        host_addr[5] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+1];
+
+        // Copy device MAC
+        uint8_t mac[6];
+        _ns_protocol_get_device_mac(mac);
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = mac[5];
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = mac[4];
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = mac[3];
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4] = mac[2];
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 5] = mac[1];
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = mac[0];
+
+        // Copy const string data
+        memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 7], pro_controller_string, 24);
         break;
+
+    // Host is requesting Link Key (XOR'd with 0xAA)
     case 2:
         _ns_protocol_set_ack(0x81, target);
-        target[NS_LIB_PROTOCOL_IDX_PAYLOAD] = 2;
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 2;
+
+        // Generate link key
+        _ns_protocol_generate_ltk();
+
+        // Copy XOR'd link key
         for (int i = 0; i < 16; i++)
         {
-            target[NS_LIB_PROTOCOL_IDX_PAYLOAD + 1 + i] = ns_lib_protocol_ltk[i] ^ 0xAA;
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1 + i] = _protocol_sm.link_key[i] ^ 0xAA;
         }
         break;
+    
+    // Host accepts, gamepad should save this data now
     case 3:
         _ns_protocol_set_ack(0x81, target);
-        target[NS_LIB_PROTOCOL_IDX_PAYLOAD] = 3;
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 3;
+
+        ns_usbpair_s pair = {
+            .host_mac = host_addr,
+            .link_key = _protocol_sm.link_key
+        };
+        ns_set_usbpair_cb(pair);
+        break;
+
+    // Gamepad already recognized as being paired by the Switch
+    default:
+    case 4:
         break;
     }
 }
 
-void ns_protocol_generate_inputreport(uint8_t *report_id, uint8_t *out)
+bool ns_protocol_generate_inputreport(uint8_t out[64])
 {
     ns_lib_protocol_pending_packet_s pending = {0};
-    if (report_id == NULL || out == NULL)
+    if (out == NULL)
     {
-        return;
+        return false;
     }
 
+    // Pop any pending commands from OUTPUT reports
     if (_ns_protocol_outputqueue_pop(&pending))
     {
         // Get output report ID
@@ -256,7 +293,7 @@ void ns_protocol_generate_inputreport(uint8_t *report_id, uint8_t *out)
         }
         if (out_id == NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD || out_id == NS_LIB_PROTOCOL_OUT_ID_INFO)
         {
-            ns_lib_protocol_generate_reply(pending.data, report_id, out);
+            ns_protocol_generate_reply(pending.data, report_id, out);
             return;
         }
     }
@@ -265,11 +302,16 @@ void ns_protocol_generate_inputreport(uint8_t *report_id, uint8_t *out)
     _ns_protocol_generate_standard_inputreport(report_id, out);
 }
 
-static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, uint8_t *out)
+static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
 {
-    _ns_lib_protocol_set_timer(out);
-    _ns_lib_protocol_set_battconn(out);
-    _ns_lib_protocol_set_command(command, out);
+    uint8_t command = in[NS_PROTOCOL_OUT_IDX_SUBCMD];
+
+    _ns_protocol_set_timer(out);
+    _ns_protocol_set_battconn(out);
+
+    ns_get_inputdata_cb((ns_inputdata_s*) out[3]);
+
+    _ns_protocol_set_command(command, out);
 
     switch (command)
     {
@@ -277,16 +319,18 @@ static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, u
         _ns_protocol_set_ack(0x80, out);
         break;
     case NS_LIB_PROTOCOL_ENABLE_IMU:
-        ns_lib_protocol_imu_mode = data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0];
-        ns_set_imumode_cb(ns_lib_protocol_imu_mode);
+        _protocol_sm.imu_mode = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
+        ns_set_imumode_cb(_protocol_sm.imu_mode);
         _ns_protocol_set_ack(0x80, out);
         break;
     case NS_LIB_PROTOCOL_SET_PAIRING:
-        _ns_protocol_pairing_set(data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0], &data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG1], out);
+        // ACK is set within the pairing set handler
+        // because of the varieties of responses used
+        _ns_protocol_pairing_set(in, out);
         break;
     case NS_LIB_PROTOCOL_SET_INPUTMODE:
         _ns_protocol_set_ack(0x80, out);
-        ns_lib_protocol_reporting_mode = data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0];
+        _protocol_sm.reporting_mode = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
         break;
     case NS_LIB_PROTOCOL_GET_DEVICEINFO:
         _ns_protocol_set_ack(0x82, out);
@@ -294,16 +338,19 @@ static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, u
         break;
     case NS_LIB_PROTOCOL_SET_SHIPMODE:
         _ns_protocol_set_ack(0x80, out);
+        // Don't handle this
         break;
     case NS_LIB_PROTOCOL_GET_SPI:
         _ns_protocol_set_ack(0x90, out);
-        ns_spi_get(data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG1], data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0],
-                       data[NS_LIB_PROTOCOL_IDX_PAYLOAD2], out);
+        ns_spi_get(in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+1], in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG],
+                       in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG+4], out);
         break;
     case NS_LIB_PROTOCOL_SET_HCI:
+        // We handle this pre-emptively, no need to deal with this here
         break;
     case NS_LIB_PROTOCOL_SET_SPI:
         _ns_protocol_set_ack(0x80, out);
+        // We do not write to our virtual SPI device
         break;
     case NS_LIB_PROTOCOL_GET_TRIGGERET:
         _ns_protocol_set_ack(0x83, out);
@@ -311,11 +358,12 @@ static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, u
         break;
     case NS_LIB_PROTOCOL_ENABLE_VIBRATE:
         _ns_protocol_set_ack(0x80, out);
+        // Unhandled right now. Presumed to be enabled always.
         break;
     case NS_LIB_PROTOCOL_SET_PLAYER:
     {
         _ns_protocol_set_ack(0x80, out);
-        uint8_t player = data[NS_LIB_PROTOCOL_IDX_SUBCMD_ARG0] & 0xF;
+        uint8_t player = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG] & 0xF;
         uint8_t set_num = 0;
         switch (player)
         {
@@ -356,60 +404,137 @@ static void _ns_protocol_command_handler(uint8_t command, const uint8_t *data, u
     }
 }
 
-void ns_lib_protocol_generate_reply(const uint8_t *in, uint8_t *report_id, uint8_t *out)
+void ns_protocol_generate_reply(const uint8_t *in, uint8_t *out)
 {
     switch (in[0])
     {
     case NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD:
-        *report_id = NS_LIB_PROTOCOL_REPLY_ID_21;
-        _ns_protocol_command_handler(in[NS_LIB_PROTOCOL_IDX_SUBCMD], in, out);
+        out[0] = NS_LIB_PROTOCOL_REPLY_ID_21;
+        _ns_protocol_command_handler(in, out);
         break;
     case NS_LIB_PROTOCOL_OUT_ID_INFO:
-        *report_id = NS_LIB_PROTOCOL_REPLY_ID_81;
-        _ns_protocol_info_handler(in[NS_LIB_PROTOCOL_IDX_INFO_CODE], out);
+        out[0] = NS_LIB_PROTOCOL_REPLY_ID_81;
+        _ns_protocol_info_handler(in[NS_PROTOCOL_OUT_IDX_INFO], out);
         break;
     default:
         break;
     }
 }
 
-uint8_t ns_lib_protocol_process_host_input(const uint8_t *in, uint16_t in_len, uint8_t *out_report_id,
+uint8_t ns_protocol_process_host_input(const uint8_t *in, uint16_t in_len, uint8_t *out_report_id,
                                            uint8_t *out)
 {
     (void)out_report_id;
     (void)out;
-    return ns_lib_protocol_enqueue_host_input(in, in_len);
+    return ns_protocol_enqueue_host_input(in, in_len);
 }
 
-uint8_t ns_lib_protocol_enqueue_host_input(const uint8_t *in, uint16_t in_len)
+static bool _ns_protocol_outputqueue_pop(ns_lib_protocol_pending_packet_s *out_packet)
 {
-    if (in == NULL || in_len == 0u)
+    if (out_packet == NULL || s_ns_lib_protocol_queue_count == 0u)
     {
         return 0u;
     }
-    if (in_len > NS_LIB_PROTOCOL_MAX_PACKET_BYTES)
+
+    *out_packet = s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_head];
+
+    s_ns_lib_protocol_queue_head = (uint8_t)((s_ns_lib_protocol_queue_head + 1u) % NS_LIB_PROTOCOL_CMD_FIFO_DEPTH);
+    s_ns_lib_protocol_queue_count--;
+    return true;
+}
+
+bool _ns_protocol_generate_init(uint8_t out[64])
+{
+    if(out == NULL) 
     {
-        in_len = NS_LIB_PROTOCOL_MAX_PACKET_BYTES;
+        return false;
     }
+
+    memset(out, 0, 64);
+    out[0] = NS_LIB_PROTOCOL_REPLY_ID_81;
+    _ns_protocol_info_set_mac(out);
+
+    return true;
+}
+
+bool ns_protocol_generate_inputreport(uint8_t out[64])
+{
+    // First packet sent should be the init packet
+    if(!_protocol_sm.init_sent)
+    {
+        ns_device_config_s cfg = {0};
+        ns_device_config_get(&cfg);
+
+        if(_ns_protocol_generate_init(out))
+        {
+            _protocol_sm.init_sent = true;
+            return true;
+        }
+        return false;
+    }
+
+
+}
+
+void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len)
+{
+    if (in == NULL || len == 0u)
+    {
+        return;
+    }
+
+    if (len > NS_LIB_PROTOCOL_MAX_PACKET_BYTES)
+    {
+        len = NS_LIB_PROTOCOL_MAX_PACKET_BYTES;
+    }
+
+    // Process any possible haptic data here
+    switch(in[NS_LIB_PROTOCOL_IDX])
+    {
+        case NS_LIB_PROTOCOL_OUT_ID_RUMBLE:
+        // Process haptics
+        ns_haptics_rumble_translate(&in[2]);
+        break;
+
+        case NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD:
+
+        // Check for shutdown case
+        // For such a command, a shutdown should occur before
+        // anything else
+        if(in[NS_LIB_PROTOCOL_IDX_SUBCMD] == NS_LIB_PROTOCOL_SET_HCI)
+        {
+            ns_set_power_cb(true);
+            return;
+        }
+
+        // Process haptics
+        ns_haptics_rumble_translate(&in[2]);
+        break;
+
+        default:
+        case NS_LIB_PROTOCOL_OUT_ID_INFO:
+        // Ingest command passthrough
+        break;
+    }
+
     if (s_ns_lib_protocol_queue_count >= NS_LIB_PROTOCOL_CMD_FIFO_DEPTH)
     {
         return 0u;
     }
 
     ns_lib_protocol_pending_packet_s *slot = &s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_tail];
-    slot->len = in_len;
-    memcpy(slot->data, in, in_len);
+    slot->len = len;
+    memcpy(slot->data, in, len);
 
     s_ns_lib_protocol_queue_tail = (uint8_t)((s_ns_lib_protocol_queue_tail + 1u) % NS_LIB_PROTOCOL_CMD_FIFO_DEPTH);
     s_ns_lib_protocol_queue_count++;
-    return 1u;
 }
 
 static void _ns_protocol_generate_standard_inputreport(uint8_t *report_id, uint8_t *out)
 {
     *report_id = NS_LIB_PROTOCOL_REPORT_ID_30;
-    _ns_lib_protocol_set_timer(out);
-    _ns_lib_protocol_set_battconn(out);
+    _ns_protocol_set_timer(out);
+    _ns_protocol_set_battconn(out);
 
     ns_get_inputdata_cb((ns_inputdata_s*) out[3]);
 
@@ -456,16 +581,4 @@ static void _ns_protocol_generate_standard_inputreport(uint8_t *report_id, uint8
     }
 }
 
-static uint8_t _ns_protocol_outputqueue_pop(ns_lib_protocol_pending_packet_s *out_packet)
-{
-    if (out_packet == NULL || s_ns_lib_protocol_queue_count == 0u)
-    {
-        return 0u;
-    }
 
-    *out_packet = s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_head];
-
-    s_ns_lib_protocol_queue_head = (uint8_t)((s_ns_lib_protocol_queue_head + 1u) % NS_LIB_PROTOCOL_CMD_FIFO_DEPTH);
-    s_ns_lib_protocol_queue_count--;
-    return 1u;
-}

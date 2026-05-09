@@ -30,6 +30,11 @@
 extern "C" {
 #endif
 
+void ns_device_fw_version(uint8_t *upper, uint8_t *lower);
+
+void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
+                                           uint8_t *snes_region_byte);
+
 /**
  * @brief Check whether @p cfg has required fields for active use.
  *

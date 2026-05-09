@@ -27,6 +27,72 @@ static ns_device_config_s s_ns_device_config;
 static uint8_t s_ns_config_ready;
 static const float NS_CFG_DEFAULT_GYRO_FS_DPS = 2000.0f;
 
+void ns_device_fw_version(uint8_t *upper, uint8_t *lower)
+{
+    *upper = 0x04;
+    *lower = 0x33;
+}
+
+void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
+                                           uint8_t *snes_region_byte)
+{
+    *color_byte = 0x01;
+    *snes_region_byte = 0x00;
+
+    switch (t)
+    {
+    case NS_DEVTYPE_JOYCON_R:
+        *id_hi = 0x01;
+        *id_lo = 0x02;
+        return;
+    case NS_DEVTYPE_JOYCON_L:
+        *id_hi = 0x02;
+        *id_lo = 0x02;
+        return;
+    case NS_DEVTYPE_N64:
+        *id_hi = 0x0C;
+        *id_lo = 0x11;
+        return;
+    case NS_DEVTYPE_SNES_NA:
+        *id_hi = 0x0B;
+        *id_lo = 0x02;
+        *color_byte = 0x02;
+        *snes_region_byte = 0x00;
+        return;
+    case NS_DEVTYPE_SNES_JP:
+        *id_hi = 0x0B;
+        *id_lo = 0x02;
+        *color_byte = 0x02;
+        *snes_region_byte = 0x01;
+        return;
+    case NS_DEVTYPE_SNES_EU:
+        *id_hi = 0x0B;
+        *id_lo = 0x02;
+        *color_byte = 0x02;
+        *snes_region_byte = 0x02;
+        return;
+    case NS_DEVTYPE_FAMI:
+        *id_hi = 0x07;
+        *id_lo = 0x02;
+        return;
+    case NS_DEVTYPE_NES:
+        *id_hi = 0x09;
+        *id_lo = 0x02;
+        return;
+    case NS_DEVTYPE_MEGADRIVE:
+    case NS_DEVTYPE_GENESIS:
+        *id_hi = 0x0D;
+        *id_lo = 0x02;
+        return;
+    case NS_DEVTYPE_PROCON:
+    case NS_DEVTYPE_UNDEFINED:
+    default:
+        *id_hi = 0x03;
+        *id_lo = 0x02;
+        return;
+    }
+}
+
 ns_config_status_t ns_device_config_validate(const ns_device_config_s *cfg)
 {
     if (!cfg)
