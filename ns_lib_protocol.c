@@ -166,8 +166,8 @@ static void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
         .right_buttons = in->right_buttons,
     };
 
-    ns_analog_pack_xy12(in->ls_x, in->ls_y, &packed.left_stick);
-    ns_analog_pack_xy12(in->rs_x, in->rs_y, &packed.right_stick);
+    ns_analog_pack_xy12(in->ls_x, in->ls_y, packed.left_stick);
+    ns_analog_pack_xy12(in->rs_x, in->rs_y, packed.right_stick);
 
     // memcpy(&target[NS_PROTOCOL_IN_IDX_BUTTONS], &packed, sizeof(packed));
 }
@@ -214,10 +214,10 @@ static void _ns_protocol_info_handler(uint8_t *in, uint8_t *target)
     }
 }
 
-static void _ns_protocol_pairing_set(uint8_t *in, uint8_t *target)
+static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
 {
     // This is a const value that is used in the pairing response data
-    const uint8_t pro_controller_string[24] = {0x00, 0x25, 0x08, 0x50, 0x72, 0x6F, 0x20, 0x43, 0x6F,
+    const uint8_t pro_controller_string[25] = {0x00, 0x25, 0x08, 0x50, 0x72, 0x6F, 0x20, 0x43, 0x6F,
                                                0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x6C, 0x65, 0x72, 0x00,
                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68};
 
@@ -251,7 +251,7 @@ static void _ns_protocol_pairing_set(uint8_t *in, uint8_t *target)
         target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = mac[0];
 
         // Copy const string data
-        memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 7], pro_controller_string, 24);
+        memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 7], pro_controller_string, 25);
         break;
 
     // Host is requesting Link Key (XOR'd with 0xAA)
@@ -270,9 +270,9 @@ static void _ns_protocol_pairing_set(uint8_t *in, uint8_t *target)
         break;
 
         // Save our data to gamepad
-        ns_usbpair_s pair = {
-            .host_mac = host_addr,
-            .link_key = _protocol_sm.link_key};
+        ns_usbpair_s pair = {0};
+        memcpy(pair.host_mac, host_addr, 6);
+        memcpy(pair.link_key, _protocol_sm.link_key, 16);
         ns_set_usbpair_cb(pair);
 
     // Host accepts or acknowledges we are already paired

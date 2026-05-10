@@ -119,32 +119,6 @@ __attribute__((weak)) void ns_get_imu_quaternion_cb(ns_quaternion_s *out)
     *out = quat_state;
 }
 
-static void ns_pack_i16_le(uint8_t *dst, int16_t v)
-{
-    dst[0] = (uint8_t)((unsigned)v & 0xFFu);
-    dst[1] = (uint8_t)(((unsigned)v >> 8) & 0xFFu);
-}
-
-/** Fills one 12-byte IMU group: ay, ax, az, gy, gx, gz as int16 LE (matches legacy swcmd layout). */
-static void ns_lib_fill_imu_group12(const ns_gyrodata_s *g, uint8_t *dst12)
-{
-    ns_pack_i16_le(dst12 + 0, g->accel_y);
-    ns_pack_i16_le(dst12 + 2, g->accel_x);
-    ns_pack_i16_le(dst12 + 4, g->accel_z);
-    ns_pack_i16_le(dst12 + 6, g->gyro_y);
-    ns_pack_i16_le(dst12 + 8, g->gyro_x);
-    ns_pack_i16_le(dst12 + 10, g->gyro_z);
-}
-
-static void ns_lib_pack_imu_standard_groups36(uint8_t *report)
-{
-    ns_gyrodata_s g = {0};
-    ns_get_imu_raw_cb(&g);
-    ns_lib_fill_imu_group12(&g, report + 12);
-    memcpy(report + 24, report + 12, 12);
-    memcpy(report + 36, report + 12, 12);
-}
-
 ns_config_status_t ns_api_init(const ns_device_config_s *cfg)
 {
     ns_config_status_t st = ns_device_config_set(cfg);
@@ -157,13 +131,13 @@ ns_config_status_t ns_api_init(const ns_device_config_s *cfg)
     return NS_CONFIG_OK;
 }
 
-void ns_api_generate_inputreport(uint8_t *data, uint16_t len)
+bool ns_api_generate_inputreport(uint8_t data[64])
 {
-    if (data == NULL || len < 64u)
+    if (data == NULL)
     {
-        return;
+        return false;
     }
-    (void)ns_protocol_generate_inputreport(data);
+    return ns_protocol_generate_inputreport(data);
 }
 
 ns_config_status_t ns_lib_init(const ns_device_config_s *cfg)
@@ -171,7 +145,7 @@ ns_config_status_t ns_lib_init(const ns_device_config_s *cfg)
     return ns_api_init(cfg);
 }
 
-void ns_api_output_tunnel(uint8_t *data, uint16_t len)
+void ns_api_output_tunnel(const uint8_t *data, uint16_t len)
 {
     if (data == NULL || len == 0u)
     {
@@ -199,13 +173,4 @@ __attribute__((weak)) uint8_t ns_get_random_u8(void)
     static uint16_t s = 0xACE1u;
     s = (uint16_t)(s * 1103515245u + 12345u);
     return (uint8_t)(s >> 8);
-}
-
-__attribute__((weak)) void ns_fill_imu_standard_report(uint8_t *report)
-{
-    if (!report)
-    {
-        return;
-    }
-    ns_lib_pack_imu_standard_groups36(report);
 }

@@ -257,6 +257,59 @@ static const uint8_t k_ns_usb_config_descriptor[NS_HID_USB_CONFIG_DESCRIPTOR_LEN
     /* Configuration Descriptor (bLength=9) */
     9,    /* bLength              = 9 bytes */
     2,    /* bDescriptorType      = CONFIGURATION */
+    41,   /* wTotalLength (lo)    = 41 bytes */
+    0,    /* wTotalLength (hi) */
+    1,    /* bNumInterfaces       = 2 */
+    1,    /* bConfigurationValue  = 1 */
+    0,    /* iConfiguration       = none */
+    160,  /* bmAttributes         = 0xA0 (bus-powered, remote wakeup) */
+    125,  /* bMaxPower            = 125 × 2mA = 250mA */
+
+    /* Interface Descriptor 0 (HID) */
+    9,    /* bLength              = 9 bytes */
+    4,    /* bDescriptorType      = INTERFACE */
+    0,    /* bInterfaceNumber     = 0 */
+    0,    /* bAlternateSetting    = 0 */
+    2,    /* bNumEndpoints        = 2 */
+    3,    /* bInterfaceClass      = HID (0x03) */
+    0,    /* bInterfaceSubClass   = none */
+    0,    /* bInterfaceProtocol   = none */
+    0,    /* iInterface           = none */
+
+    /* HID Descriptor */
+    9,    /* bLength              = 9 bytes */
+    33,   /* bDescriptorType      = HID (0x21) */
+    17,   /* bcdHID (lo)          = HID spec 1.11 */
+    1,    /* bcdHID (hi) */
+    0,    /* bCountryCode         = not localized */
+    1,    /* bNumDescriptors      = 1 */
+    34,   /* bDescriptorType      = REPORT (0x22) */
+    203,  /* wDescriptorLength(lo)= 203 bytes */
+    0,    /* wDescriptorLength(hi) */
+
+    /* Endpoint Descriptor: EP1 IN (Interrupt) */
+    7,    /* bLength              = 7 bytes */
+    5,    /* bDescriptorType      = ENDPOINT */
+    0x81, /* bEndpointAddress     = EP1 IN */
+    3,    /* bmAttributes         = Interrupt */
+    64,   /* wMaxPacketSize (lo)  = 64 bytes */
+    0,    /* wMaxPacketSize (hi) */
+    1,    /* bInterval            = 1ms */
+
+    /* Endpoint Descriptor: EP1 OUT (Interrupt) */
+    7,    /* bLength              = 7 bytes */
+    5,    /* bDescriptorType      = ENDPOINT */
+    0x01, /* bEndpointAddress     = EP1 OUT */
+    3,    /* bmAttributes         = Interrupt */
+    64,   /* wMaxPacketSize (lo)  = 64 bytes */
+    0,    /* wMaxPacketSize (hi) */
+    1,    /* bInterval            = 1ms */
+};
+
+static const uint8_t k_ns_usb_webusb_config_descriptor[NS_HID_USB_WEBUSB_CONFIG_DESCRIPTOR_LEN] = {
+    /* Configuration Descriptor (bLength=9) */
+    9,    /* bLength              = 9 bytes */
+    2,    /* bDescriptorType      = CONFIGURATION */
     64,   /* wTotalLength (lo)    = 64 bytes */
     0,    /* wTotalLength (hi) */
     2,    /* bNumInterfaces       = 2 */

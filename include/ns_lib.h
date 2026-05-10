@@ -117,13 +117,11 @@ uint8_t ns_get_random_u8(void);
  *
  * Writes report id to `data[0]` and payload to `data[1..]`.
  *
- * @param data Output buffer.
- * @param len Output buffer length in bytes (minimum 64; report id at @c data[0], payload follows).
- */
-void ns_api_generate_inputreport(uint8_t *data, uint16_t len);
+ * @param data[64] Output buffer of 64 bytes size.*/
+bool ns_api_generate_inputreport(uint8_t data[64]);
 
 
-void ns_api_output_tunnel(uint8_t *data, uint16_t len);
+void ns_api_output_tunnel(const uint8_t *data, uint16_t len);
 
 /**
  * @brief One-shot initialize: apply device config, then initialize runtime state.

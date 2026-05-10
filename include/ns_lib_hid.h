@@ -38,7 +38,10 @@ extern "C" {
 #define NS_HID_BTC_REPORT_DESCRIPTOR_LEN 170u
 
 /** @brief Byte length of the full-speed configuration descriptor (HID + vendor interfaces). */
-#define NS_HID_USB_CONFIG_DESCRIPTOR_LEN 64u
+#define NS_HID_USB_CONFIG_DESCRIPTOR_LEN 41u
+
+/** @brief Byte length of the full-speed configuration descriptor (HID + vendor interfaces). */
+#define NS_HID_USB_WEBUSB_CONFIG_DESCRIPTOR_LEN 64u
 
 /** @brief Standard USB device descriptor size (USB 2.0). */
 #define NS_USB_DEVICE_DESCRIPTOR_LEN 18u
