@@ -65,8 +65,6 @@ typedef struct
     uint8_t imu_mode;
     bool init_sent;
     uint8_t reporting_mode;
-    uint8_t device_mac[6];
-    uint8_t host_mac[6];
     uint8_t link_key[16];
 } ns_lib_protocol_sm_s;
 
@@ -227,6 +225,9 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
 
     static uint8_t host_mac[6] = {0};
 
+    ns_device_config_s cfg = {0};
+    ns_device_config_get(&cfg);
+
     uint8_t in_code = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
 
     bool console_has_gamepad_in_db  = false;
@@ -265,9 +266,13 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         {
             target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1 + i] = _protocol_sm.link_key[i] ^ 0xAA;
         }
+
+        // Update runtime config host mac
+        memcpy(cfg.host_mac, host_mac, 6);
+        ns_device_config_set(&cfg);
+
         // Save our data to gamepad
         ns_usbpair_s pair = {0};
-        memcpy(_protocol_sm.host_mac, host_mac, 6);
         memcpy(pair.host_mac, host_mac, 6);
         memcpy(pair.link_key, _protocol_sm.link_key, 16);
 
@@ -298,7 +303,7 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         // Compare host address to our stored host address
         for(int i = 0; i < 6; i++)
         {
-            if(host_mac[i] != _protocol_sm.host_mac[i])
+            if(host_mac[i] != cfg.host_mac[i])
             {
                gamepad_host_mac_matches = false;
             }
@@ -307,12 +312,13 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         if(!gamepad_host_mac_matches || !console_has_gamepad_in_db)
         {
             target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 1;
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = _protocol_sm.device_mac[5];
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = _protocol_sm.device_mac[4];
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = _protocol_sm.device_mac[3];
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4] = _protocol_sm.device_mac[2];
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 5] = _protocol_sm.device_mac[1];
-            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = _protocol_sm.device_mac[0];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = cfg.device_mac[5];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = cfg.device_mac[4];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = cfg.device_mac[3];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4] = cfg.device_mac[2];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 5] = cfg.device_mac[1];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = cfg.device_mac[0];
+            memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 7], pro_controller_string, sizeof(pro_controller_string));
         }
         else
         {
