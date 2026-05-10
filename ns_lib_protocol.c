@@ -65,6 +65,8 @@ typedef struct
     uint8_t imu_mode;
     bool init_sent;
     uint8_t reporting_mode;
+    uint8_t device_mac[6];
+    uint8_t host_mac[6];
     uint8_t link_key[16];
 } ns_lib_protocol_sm_s;
 
@@ -223,67 +225,100 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
                                                0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x6C, 0x65, 0x72, 0x00,
                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68};
 
-    static uint8_t host_addr[6] = {0};
+    static uint8_t host_mac[6] = {0};
 
-    uint8_t phase = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
+    uint8_t in_code = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
 
-    switch (phase)
+    bool console_has_gamepad_in_db  = false;
+    bool message_has_console_mac    = false;
+    bool gamepad_host_mac_matches   = true;
+
+    // set ACK
+    _ns_protocol_set_ack(0x81, target);
+
+    switch(in_code)
     {
-    // Pairing process initialized
-    case 1:
-        _ns_protocol_set_ack(0x81, target);
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 1;
-
-        // Extract HOST address
-        host_addr[0] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 6];
-        host_addr[1] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 5];
-        host_addr[2] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 4];
-        host_addr[3] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 3];
-        host_addr[4] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 2];
-        host_addr[5] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 1];
-
-        // Copy device MAC
-        uint8_t mac[6];
-        _ns_protocol_get_device_mac(mac);
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = mac[5];
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = mac[4];
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = mac[3];
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4] = mac[2];
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 5] = mac[1];
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = mac[0];
-
-        // Copy const string data
-        memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 7], pro_controller_string, 25);
+        // Console does not have a matching
+        // DB entry for this gamepad's MAC address
+        case 1:
+        console_has_gamepad_in_db = false;
+        message_has_console_mac = true;
         break;
 
-    // Host is requesting Link Key (XOR'd with 0xAA)
-    case 2:
-        _ns_protocol_set_ack(0x81, target);
-        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 2;
+        // Console has a matching DB entry
+        // for this gamepad's MAC address
+        case 4:
+        console_has_gamepad_in_db = true;
+        message_has_console_mac = true;
+        break;
 
+        // Console is requesting a new
+        // randomly generated Link Key
+        // The gamepad generates the Link Key
+        // and provides it to the Console
+        case 2:
+        target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 2;
         // Generate link key
         _ns_protocol_generate_ltk();
-
         // Copy XOR'd link key
         for (int i = 0; i < 16; i++)
         {
             target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1 + i] = _protocol_sm.link_key[i] ^ 0xAA;
         }
-        break;
-
         // Save our data to gamepad
         ns_usbpair_s pair = {0};
-        memcpy(pair.host_mac, host_addr, 6);
+        memcpy(_protocol_sm.host_mac, host_mac, 6);
+        memcpy(pair.host_mac, host_mac, 6);
         memcpy(pair.link_key, _protocol_sm.link_key, 16);
-        ns_set_usbpair_cb(pair);
 
-    // Host accepts or acknowledges we are already paired
-    default:
-    case 3:
-    case 4:
-        _ns_protocol_set_ack(0x81, target);
+        // Send user-space callback
+        // To save link key for 
+        // Host MAC address
+        ns_set_usbpair_cb(pair);
+        return;
+
+        // Console indicates that it received
+        // the Link Key and it's stored
+        default:
+        case 3:
         target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 3;
-        break;
+        return;
+    }
+
+    if(message_has_console_mac)
+    {
+        // Extract HOST address
+        host_mac[0] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 6];
+        host_mac[1] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 5];
+        host_mac[2] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 4];
+        host_mac[3] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 3];
+        host_mac[4] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 2];
+        host_mac[5] = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG + 1];
+
+        // Compare host address to our stored host address
+        for(int i = 0; i < 6; i++)
+        {
+            if(host_mac[i] != _protocol_sm.host_mac[i])
+            {
+               gamepad_host_mac_matches = false;
+            }
+        }
+
+        if(!gamepad_host_mac_matches || !console_has_gamepad_in_db)
+        {
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 1;
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 1] = _protocol_sm.device_mac[5];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = _protocol_sm.device_mac[4];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = _protocol_sm.device_mac[3];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4] = _protocol_sm.device_mac[2];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 5] = _protocol_sm.device_mac[1];
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD + 6] = _protocol_sm.device_mac[0];
+        }
+        else
+        {
+            target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 3;
+        }
+        return;
     }
 }
 
