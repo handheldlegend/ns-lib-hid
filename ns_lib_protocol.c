@@ -158,7 +158,7 @@ static void _ns_protocol_set_subtriggertime(uint16_t time_10_ms, uint8_t *target
     }
 }
 
-void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
+static void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
 {
     ns_inputdata_packed_s packed = {
         .left_buttons = in->left_buttons,
@@ -169,13 +169,13 @@ void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
     ns_analog_pack_xy12(in->ls_x, in->ls_y, &packed.left_stick);
     ns_analog_pack_xy12(in->rs_x, in->rs_y, &packed.right_stick);
 
-    //memcpy(&target[NS_PROTOCOL_IN_IDX_BUTTONS], &packed, sizeof(packed));
+    // memcpy(&target[NS_PROTOCOL_IN_IDX_BUTTONS], &packed, sizeof(packed));
 }
 
 static void _ns_protocol_info_set_mac(uint8_t *target)
 {
     target[1] = 1u;
-    target[0] = 0u;
+    target[2] = 0u;
     target[3] = 3u;
 
     uint8_t mac[6];
@@ -189,8 +189,10 @@ static void _ns_protocol_info_set_mac(uint8_t *target)
     target[9] = mac[0];
 }
 
-static void _ns_protocol_info_handler(uint8_t info_code, uint8_t *target)
+static void _ns_protocol_info_handler(uint8_t *in, uint8_t *target)
 {
+    uint8_t info_code = in[1];
+
     switch (info_code)
     {
     // First stage, device info request
@@ -283,33 +285,59 @@ static void _ns_protocol_pairing_set(uint8_t *in, uint8_t *target)
     }
 }
 
-bool ns_protocol_generate_inputreport(uint8_t out[64])
+static void _ns_protocol_set_standardreport(uint8_t *out)
 {
-    ns_lib_protocol_pending_packet_s pending = {0};
-    if (out == NULL)
+    // Send standard 0x30 Input Report
+    out[NS_PROTOCOL_IN_IDX_REPORT_ID] = NS_LIB_PROTOCOL_IN_REPORT_ID_30;
+    _ns_protocol_set_timer(out);
+    _ns_protocol_set_battconn(out);
+
+    static ns_gyrodata_s gyro = {0};
+    static ns_mode_2_s mode_2_data = {0};
+    static ns_quaternion_s quat = {0};
+
+    static ns_inputdata_s input = {0};
+    ns_get_inputdata_cb(&input);
+    _ns_protocol_set_inputdata(&input, out);
+
+    switch (_protocol_sm.imu_mode)
     {
-        return false;
-    }
-
-    // Pop any pending commands from OUTPUT reports
-    if (_ns_protocol_outputqueue_pop(&pending))
+    case NS_IMU_RAW:
+        // Callback to get user gyro data
+        ns_get_imu_standard_cb(&gyro);
+        // Group 1
+        out[NS_PROTOCOL_IDX_IMU_DATA_START] = gyro.ay_8l; // Y-axis
+        out[14] = gyro.ay_8h;
+        out[15] = gyro.ax_8l; // X-axis
+        out[16] = gyro.ax_8h;
+        out[17] = gyro.az_8l; // Z-axis
+        out[18] = gyro.az_8h;
+        out[19] = gyro.gy_8l;
+        out[20] = gyro.gy_8h;
+        out[21] = gyro.gx_8l;
+        out[22] = gyro.gx_8h;
+        out[23] = gyro.gz_8l;
+        out[24] = gyro.gz_8h;
+        // Group 2
+        memcpy(&out[25], &out[NS_PROTOCOL_IDX_IMU_DATA_START], 12);
+        // Group 3
+        memcpy(&out[37], &out[NS_PROTOCOL_IDX_IMU_DATA_START], 12);
+        break;
+    case NS_IMU_QUAT:
     {
-        // Get output report ID
-        uint8_t out_id = pending.data[0];
-
-        if ((out_id == NS_LIB_PROTOCOL_OUT_ID_RUMBLE || out_id == NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD) && pending.len >= 6u)
-        {
-            ns_haptics_rumble_translate(&pending.data[2]);
-        }
-        if (out_id == NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD || out_id == NS_LIB_PROTOCOL_OUT_ID_INFO)
-        {
-            //ns_protocol_generate_reply(pending.data, report_id, out);
-            return;
-        }
+        // Callback to get user quaternion data
+        ns_get_imu_quaternion_cb(&quat);
+        // Pack our quaternion data
+        ns_motion_pack_quat(&quat, &mode_2_data);
+        // Copy to output buffer
+        memcpy(&(out[NS_PROTOCOL_IDX_IMU_DATA_START]), &mode_2_data, sizeof(ns_mode_2_s));
     }
+    break;
 
-    // Send standard input report (0x30)
-    //_ns_protocol_generate_standard_inputreport(report_id, out);
+    case NS_IMU_OFF:
+    default:
+        break;
+    }
 }
 
 static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
@@ -319,7 +347,9 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
     _ns_protocol_set_timer(out);
     _ns_protocol_set_battconn(out);
 
-    ns_get_inputdata_cb((ns_inputdata_s *)out[3]);
+    static ns_inputdata_s input = {0};
+    ns_get_inputdata_cb(&input);
+    _ns_protocol_set_inputdata(&input, out);
 
     _ns_protocol_set_command(command, out);
 
@@ -414,31 +444,6 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
     }
 }
 
-void ns_protocol_generate_reply(const uint8_t *in, uint8_t *out)
-{
-    switch (in[0])
-    {
-    case NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD:
-        out[0] = NS_LIB_PROTOCOL_REPLY_ID_21;
-        _ns_protocol_command_handler(in, out);
-        break;
-    case NS_LIB_PROTOCOL_OUT_ID_INFO:
-        out[0] = NS_LIB_PROTOCOL_REPLY_ID_81;
-        _ns_protocol_info_handler(in[NS_PROTOCOL_OUT_IDX_INFO], out);
-        break;
-    default:
-        break;
-    }
-}
-
-uint8_t ns_protocol_process_host_input(const uint8_t *in, uint16_t in_len, uint8_t *out_report_id,
-                                       uint8_t *out)
-{
-    (void)out_report_id;
-    (void)out;
-    return ns_protocol_enqueue_host_input(in, in_len);
-}
-
 static bool _ns_protocol_outputqueue_pop(ns_lib_protocol_pending_packet_s *out_packet)
 {
     if (out_packet == NULL || s_ns_lib_protocol_queue_count == 0u)
@@ -504,75 +509,23 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
         // No haptics are handled here.
         // The haptic data is ingested at reception time.
         case NS_LIB_PROTOCOL_OUT_ID_RUMBLE_CMD:
+            _ns_protocol_command_handler(pending.data, out);
+            break;
 
+        
+        case NS_LIB_PROTOCOL_OUT_ID_INFO:
+            _ns_protocol_info_handler(pending.data, out);
             break;
 
         default:
-        case NS_LIB_PROTOCOL_OUT_ID_INFO:
-
+            return false;
             break;
         }
-
         return true;
     }
     else
     {
-        // Send standard 0x30 Input Report
-        out[NS_PROTOCOL_IN_IDX_REPORT_ID] = NS_LIB_PROTOCOL_IN_REPORT_ID_30;
-        _ns_protocol_set_timer(out);
-        _ns_protocol_set_battconn(out);
-
-        static ns_gyrodata_s gyro = {0};
-        static ns_mode_2_s mode_2_data = {0};
-        static ns_quaternion_s quat = {0};
-        static ns_inputdata_s input = {0};
-        static ns_inputdata_packed_s  inputpacked = {0};
-
-        ns_get_inputdata_cb(&input);
-
-        inputpacked.left_buttons = input.left_buttons;
-        inputpacked.right_buttons = input.right_buttons;
-        
-        (ns_inputdata_s *)out[NS_PROTOCOL_IN_IDX_BUTTONS]
-
-        switch (_protocol_sm.imu_mode)
-        {
-        case NS_IMU_RAW:
-            // Callback to get user gyro data
-            ns_get_imu_standard_cb(&gyro);
-            // Group 1
-            out[NS_PROTOCOL_IDX_IMU_DATA_START] = gyro.ay_8l; // Y-axis
-            out[14] = gyro.ay_8h;
-            out[15] = gyro.ax_8l; // X-axis
-            out[16] = gyro.ax_8h;
-            out[17] = gyro.az_8l; // Z-axis
-            out[18] = gyro.az_8h;
-            out[19] = gyro.gy_8l;
-            out[20] = gyro.gy_8h;
-            out[21] = gyro.gx_8l;
-            out[22] = gyro.gx_8h;
-            out[23] = gyro.gz_8l;
-            out[24] = gyro.gz_8h;
-            // Group 2
-            memcpy(&out[25], &out[NS_PROTOCOL_IDX_IMU_DATA_START], 12);
-            // Group 3
-            memcpy(&out[37], &out[NS_PROTOCOL_IDX_IMU_DATA_START], 12);
-            break;
-        case NS_IMU_QUAT:
-        {
-            // Callback to get user quaternion data
-            ns_get_imu_quaternion_cb(&quat);
-
-            ns_motion_pack_quat(&quat, &mode_2_data);
-            memcpy(&(out[NS_PROTOCOL_IDX_IMU_DATA_START]), &mode_2_data, sizeof(ns_mode_2_s));
-        }
-        break;
-
-        case NS_IMU_OFF:
-        default:
-            break;
-        }
-
+        _ns_protocol_set_standardreport(out);
         return true;
     }
 }

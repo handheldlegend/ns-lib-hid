@@ -45,19 +45,6 @@ extern "C" {
 #define NS_LIB_PROTOCOL_GET_PLAYER 0x31
 #define NS_LIB_PROTOCOL_33 0x33
 
-extern uint8_t ns_lib_protocol_in_command_buffer[64];
-extern uint8_t ns_lib_protocol_in_report_id;
-extern uint16_t ns_lib_protocol_in_command_len;
-extern uint8_t ns_lib_protocol_in_command_got;
-
-extern uint8_t ns_lib_protocol_reporting_mode;
-extern uint8_t ns_lib_protocol_imu_mode;
-
-extern uint8_t ns_lib_protocol_command_buffer[64];
-extern uint8_t ns_lib_protocol_command_report_id;
-
-extern uint8_t ns_lib_protocol_ltk[16];
-
 bool ns_protocol_generate_inputreport(uint8_t out[64]);
 
 void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len);
