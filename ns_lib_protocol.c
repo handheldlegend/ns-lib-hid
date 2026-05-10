@@ -52,7 +52,7 @@
 #define NS_LIB_PROTOCOL_REPLY_ID_21 0x21u
 #define NS_LIB_PROTOCOL_REPLY_ID_81 0x81u
 #define NS_LIB_PROTOCOL_MAX_PACKET_BYTES 64u
-#define NS_LIB_PROTOCOL_CMD_FIFO_DEPTH 3u
+#define NS_LIB_PROTOCOL_CMD_FIFO_DEPTH 8u
 
 typedef struct
 {
@@ -191,6 +191,8 @@ static void _ns_protocol_info_set_mac(uint8_t *target)
 
 static void _ns_protocol_info_handler(uint8_t *in, uint8_t *target)
 {
+    target[0] = NS_LIB_PROTOCOL_REPLY_ID_81;
+
     uint8_t info_code = in[1];
 
     switch (info_code)
@@ -342,6 +344,7 @@ static void _ns_protocol_set_standardreport(uint8_t *out)
 
 static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
 {
+    out[0] = NS_LIB_PROTOCOL_REPLY_ID_21;
     uint8_t command = in[NS_PROTOCOL_OUT_IDX_SUBCMD];
 
     _ns_protocol_set_timer(out);
@@ -474,6 +477,8 @@ bool _ns_protocol_generate_init(uint8_t out[64])
 
 bool ns_protocol_generate_inputreport(uint8_t out[64])
 {
+    memset(out, 0, 64);
+
     // First packet sent should be the init packet
     // If we are using Bluetooth this is transparent
     if (!_protocol_sm.init_sent)
@@ -514,6 +519,11 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
 
         
         case NS_LIB_PROTOCOL_OUT_ID_INFO:
+            // Do not reply to 0x04
+            if(pending.data[1] == 0x04)
+            {
+                goto send_standard_report;
+            }
             _ns_protocol_info_handler(pending.data, out);
             break;
 
@@ -523,11 +533,10 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
         }
         return true;
     }
-    else
-    {
-        _ns_protocol_set_standardreport(out);
-        return true;
-    }
+
+send_standard_report:
+    _ns_protocol_set_standardreport(out);
+    return true;
 }
 
 void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len)

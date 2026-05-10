@@ -24,7 +24,7 @@ static const char k_ns_dev_name[] = "Pro Controller";
 static const ns_usb_device_descriptor_t k_ns_dev_usb_device_descriptor = {
     .bLength = NS_USB_DEVICE_DESCRIPTOR_LEN,
     .bDescriptorType = 1u, /* Device Descriptor */
-    .bcdUSB = 0x0210, // Changed from 0x0200 to 2.1 for BOS & WebUSB
+    .bcdUSB = 0x0200, // Changed from 0x0200 to 2.1 0x0201 for BOS & WebUSB
     .bDeviceClass = 0x00,
     .bDeviceSubClass = 0x00,
     .bDeviceProtocol = 0x00,
@@ -33,7 +33,7 @@ static const ns_usb_device_descriptor_t k_ns_dev_usb_device_descriptor = {
     .idVendor = 0x057Eu,  /* Nintendo VID */
     .idProduct = 0x2009u, /* Switch Pro Controller PID */
 
-    .bcdDevice = 0x0100,
+    .bcdDevice = 0x0210,
     .iManufacturer = 0x01,
     .iProduct = 0x02,
     .iSerialNumber = 0x03,
@@ -263,7 +263,7 @@ static const uint8_t k_ns_usb_config_descriptor[NS_HID_USB_CONFIG_DESCRIPTOR_LEN
     1,    /* bConfigurationValue  = 1 */
     0,    /* iConfiguration       = none */
     160,  /* bmAttributes         = 0xA0 (bus-powered, remote wakeup) */
-    125,  /* bMaxPower            = 125 × 2mA = 250mA */
+    250,  /* bMaxPower            = 125 × 2mA = 250mA */
 
     /* Interface Descriptor 0 (HID) */
     9,    /* bLength              = 9 bytes */
@@ -306,7 +306,7 @@ static const uint8_t k_ns_usb_config_descriptor[NS_HID_USB_CONFIG_DESCRIPTOR_LEN
     1,    /* bInterval            = 1ms */
 };
 
-static const uint8_t k_ns_usb_webusb_config_descriptor[NS_HID_USB_WEBUSB_CONFIG_DESCRIPTOR_LEN] = {
+const uint8_t k_ns_usb_webusb_config_descriptor[NS_HID_USB_WEBUSB_CONFIG_DESCRIPTOR_LEN] = {
     /* Configuration Descriptor (bLength=9) */
     9,    /* bLength              = 9 bytes */
     2,    /* bDescriptorType      = CONFIGURATION */

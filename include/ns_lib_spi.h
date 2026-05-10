@@ -30,10 +30,10 @@ extern "C" {
 #endif
 
 /** Byte index where the 5-byte SPI read descriptor is written: low address, offset, 0, 0, length. */
-#define NS_SPI_STARTREAD_IDX 14
+#define NS_SPI_STARTREAD_IDX 15
 
 /** First byte index where emulated flash contents are copied (one byte per index i). */
-#define NS_SPI_READ_OUTPUT_IDX 19
+#define NS_SPI_READ_OUTPUT_IDX 20
 
 /**
  * @brief Fill a HID report buffer with an emulated SPI flash read.
