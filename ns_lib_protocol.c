@@ -573,7 +573,7 @@ void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len)
 
     if (s_ns_lib_protocol_queue_count >= NS_LIB_PROTOCOL_CMD_FIFO_DEPTH)
     {
-        return 0u;
+        return;
     }
 
     ns_lib_protocol_pending_packet_s *slot = &s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_tail];

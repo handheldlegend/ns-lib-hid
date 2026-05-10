@@ -92,6 +92,7 @@ void ns_motion_update_quaternion(ns_quaternion_s *state, ns_motion_quat_integrat
     {
         dt = (float)(sample->timestamp_us - integrator->prev_timestamp_us) / 1000000.0f;
     }
+    
     integrator->prev_timestamp_us = sample->timestamp_us;
 
     float scale_dt = gyro_rad_per_lsb * dt;

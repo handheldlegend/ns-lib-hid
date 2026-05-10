@@ -319,6 +319,33 @@ typedef struct
     uint8_t right_stick[3];
 } ns_inputdata_packed_s;
 
+/**
+ * @brief USB device descriptor in wire layout (little-endian multi-byte fields as @c uint16_t).
+ *
+ * @note @c bLength must equal @c NS_USB_DEVICE_DESCRIPTOR_LEN (see @c ns_lib_hid.h). This struct is not a HID report descriptor.
+ */
+#pragma pack(push, 1)
+typedef struct{
+    uint8_t  bLength            ; ///< Size of this descriptor in bytes.
+    uint8_t  bDescriptorType    ; ///< DEVICE Descriptor Type.
+    uint16_t bcdUSB             ; ///< BUSB Specification Release Number in Binary-Coded Decimal (i.e., 2.10 is 210H).
+
+    uint8_t  bDeviceClass       ; ///< Class code (assigned by the USB-IF).
+    uint8_t  bDeviceSubClass    ; ///< Subclass code (assigned by the USB-IF).
+    uint8_t  bDeviceProtocol    ; ///< Protocol code (assigned by the USB-IF).
+    uint8_t  bMaxPacketSize0    ; ///< Maximum packet size for endpoint zero (only 8, 16, 32, or 64 are valid). For HS devices is fixed to 64.
+
+    uint16_t idVendor           ; ///< Vendor ID (assigned by the USB-IF).
+    uint16_t idProduct          ; ///< Product ID (assigned by the manufacturer).
+    uint16_t bcdDevice          ; ///< Device release number in binary-coded decimal.
+    uint8_t  iManufacturer      ; ///< Index of string descriptor describing manufacturer.
+    uint8_t  iProduct           ; ///< Index of string descriptor describing product.
+    uint8_t  iSerialNumber      ; ///< Index of string descriptor describing the device's serial number.
+
+    uint8_t  bNumConfigurations ; ///< Number of possible configurations.
+} ns_usb_device_descriptor_t;
+#pragma pack(pop)
+
 #ifdef __cplusplus
 }
 #endif

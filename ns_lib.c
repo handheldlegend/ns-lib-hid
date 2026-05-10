@@ -116,25 +116,6 @@ __attribute__((weak)) void ns_get_imu_quaternion_cb(ns_quaternion_s *out)
         return;
     }
     static ns_quaternion_s quat_state = {.raw = {0.f, 0.f, 0.f, 1.f}};
-    static ns_motion_quat_integrator_s integrator = {0};
-
-    ns_gyrodata_s g = {0};
-    ns_get_imu_raw_cb(&g);
-
-    ns_motion_imu_sample_s sample = {
-        .gx = g.gyro_x,
-        .gy = g.gyro_y,
-        .gz = g.gyro_z,
-        .ax = g.accel_x,
-        .ay = g.accel_y,
-        .az = g.accel_z,
-        .timestamp_us = g.timestamp_us,
-    };
-
-    ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
-
-    ns_motion_update_quaternion(&quat_state, &integrator, &sample, cfg.gyro_rad_per_lsb);
     *out = quat_state;
 }
 
@@ -178,11 +159,11 @@ ns_config_status_t ns_api_init(const ns_device_config_s *cfg)
 
 void ns_api_generate_inputreport(uint8_t *data, uint16_t len)
 {
-    if (data == NULL || len < 2u)
+    if (data == NULL || len < 64u)
     {
         return;
     }
-    ns_lib_protocol_generate_inputreport(&data[0], &data[1]);
+    (void)ns_protocol_generate_inputreport(data);
 }
 
 ns_config_status_t ns_lib_init(const ns_device_config_s *cfg)
@@ -192,7 +173,11 @@ ns_config_status_t ns_lib_init(const ns_device_config_s *cfg)
 
 void ns_api_output_tunnel(uint8_t *data, uint16_t len)
 {
-    (void)ns_lib_protocol_enqueue_host_input(data, len);
+    if (data == NULL || len == 0u)
+    {
+        return;
+    }
+    ns_protocol_process_outputreport(data, len);
 }
 
 /*

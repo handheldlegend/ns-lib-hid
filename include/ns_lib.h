@@ -17,6 +17,7 @@
 #include "ns_lib_haptics.h"
 #include "ns_lib_motion.h"
 #include "ns_lib_spi.h"
+#include "ns_lib_hid.h"
 
 
 #ifdef __cplusplus
@@ -117,7 +118,7 @@ uint8_t ns_get_random_u8(void);
  * Writes report id to `data[0]` and payload to `data[1..]`.
  *
  * @param data Output buffer.
- * @param len Output buffer length in bytes (minimum 2).
+ * @param len Output buffer length in bytes (minimum 64; report id at @c data[0], payload follows).
  */
 void ns_api_generate_inputreport(uint8_t *data, uint16_t len);
 

@@ -18,6 +18,7 @@ add_library(ns_lib_hid STATIC
   ns_lib_motion.c
   ns_lib_spi.c
   ns_lib_protocol.c
+  ns_lib_hid.c
   ns_lib.c
 )
 
