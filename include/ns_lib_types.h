@@ -110,8 +110,8 @@ typedef enum
 /** @brief Stored pairing credentials for Bluetooth reconnect. */
 typedef struct
 {
-    uint8_t host_mac[6]; /**< Paired console radio MAC, 6 bytes. */
-    uint8_t link_key[16]; /**< Link key for encrypted ACL, 16 bytes. */
+    uint8_t host_mac[6]; /** Paired console radio MAC, 6 bytes stored Big-Endian (AA:BB:CC:DD:EE:FF). */
+    uint8_t link_key[16]; /** Link key for encrypted ACL, 16 bytes stored Big-Endian (AA:BB:CC:DD:etc). */
 } ns_usbpair_s;
 
 /**

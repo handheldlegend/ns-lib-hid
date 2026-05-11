@@ -169,7 +169,7 @@ static void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
     ns_analog_pack_xy12(in->ls_x, in->ls_y, packed.left_stick);
     ns_analog_pack_xy12(in->rs_x, in->rs_y, packed.right_stick);
 
-    // memcpy(&target[NS_PROTOCOL_IN_IDX_BUTTONS], &packed, sizeof(packed));
+    memcpy(&target[NS_PROTOCOL_IN_IDX_BUTTONS], &packed, sizeof(packed));
 }
 
 static void _ns_protocol_info_set_mac(uint8_t *target)
