@@ -429,7 +429,7 @@ bool ns_hid_get_descriptor_params(const uint8_t **hid_report_descriptor, uint16_
                                   uint16_t *vid, uint16_t *pid)
 {
     ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
+    ns_config_get(&cfg);
 
     if (cfg.transport != NS_TRANSPORT_USB && cfg.transport != NS_TRANSPORT_BTC)
     {

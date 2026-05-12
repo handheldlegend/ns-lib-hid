@@ -34,8 +34,6 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
      *   0x60xx: factory/config/calibration/color/sensor params
      *   0x80xx: user calibration region
      */
-    ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
 
     switch (offset_address)
     {
@@ -105,8 +103,11 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
 
         /* Factory configuration and calibration */
         uint8_t factory_id_hi, factory_id_lo, factory_color_byte, factory_snes_region_byte;
-        ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
+        ns_config_get_devtype_bytes(&factory_id_hi, &factory_id_lo, &factory_color_byte,
                                        &factory_snes_region_byte);
+
+        ns_device_config_s cfg;
+        ns_config_get(&cfg);
 
         switch (address)
         {
@@ -216,41 +217,41 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
 
         case 0x50:
             /* Stage 2 (0x6050): body color (RGB) */
-            return cfg.colors.body_r;
+            return cfg.colors.body.r;
         case 0x51:
-            return cfg.colors.body_g;
+            return cfg.colors.body.g;
         case 0x52:
-            return cfg.colors.body_b;
+            return cfg.colors.body.b;
 
         case 0x53:
             /* Stage 2: button color (RGB) */
-            return cfg.colors.buttons_r;
+            return cfg.colors.buttons.r;
 
         case 0x54:
-            return cfg.colors.buttons_g;
+            return cfg.colors.buttons.g;
 
         case 0x55:
-            return cfg.colors.buttons_b;
+            return cfg.colors.buttons.b;
 
         case 0x56:
             /* Stage 2: left grip color (RGB) */
-            return cfg.colors.l_grip_r;
+            return cfg.colors.l_grip.r;
 
         case 0x57:
-            return cfg.colors.l_grip_g;
+            return cfg.colors.l_grip.g;
 
         case 0x58:
-            return cfg.colors.l_grip_b;
+            return cfg.colors.l_grip.b;
 
         case 0x59:
             /* Stage 2: right grip color (RGB) */
-            return cfg.colors.r_grip_r;
+            return cfg.colors.r_grip.r;
 
         case 0x5A:
-            return cfg.colors.r_grip_g;
+            return cfg.colors.r_grip.g;
 
         case 0x5B:
-            return cfg.colors.r_grip_b;
+            return cfg.colors.r_grip.b;
 
         // This is used for SNES controller color options
         // 0x00 - North America (Super Nintendo Purple)

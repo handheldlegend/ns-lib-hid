@@ -42,12 +42,21 @@ static ns_haptic_defaults_s _ns_haptic_defaults = {
     .min_frequency      = 0,
     .max_frequency      = 127
 };
+static ns_haptics_packet_raw_s _ns_raw_state = {0};
 
 #define AMPLITUDE_RANGE_START    -8.0f
 #define AMPLITUDE_INTERVAL       0.03125f
 #define STARTING_AMPLITUDE_FLOAT -7.9375f
 
-void _ns_haptics_build_raw_tables(ns_lib_haptics_tables_s *out)
+/*
+ * Build the library's reference curves once at init time.
+ *
+ * These tables serve two roles:
+ *   1) optional float conversion for tooling / software playback
+ *   2) source data for precomputed fixed-point tables used by hardware-specific
+ *      playback engines
+ */
+void _ns_haptics_build_raw_tables(ns_haptics_tables_s *out)
 {
     if (out == NULL)
     {
@@ -69,12 +78,17 @@ void _ns_haptics_build_raw_tables(ns_lib_haptics_tables_s *out)
 }
 
 /** Zero until @ref _ns_haptics_install_builtin_tables (via @ref ns_haptics_init); lookup helpers read these LUTs as-is. */
-static ns_lib_haptics_tables_s _ns_tables = {0};
+static ns_haptics_tables_s _ns_tables = {0};
 static uint8_t _ns_amp_index[128] = {0};
 static uint64_t _ns_haptic_packet_counter;
 
 static void _ns_haptics_install_builtin_tables(void);
 
+/*
+ * Host amplitude indices do not map linearly to the exp2 envelope table.
+ * This helper collapses the protocol's piecewise encoding into a single
+ * 0..255 lookup row so the rest of the code can treat amplitude uniformly.
+ */
 uint8_t _ns_haptics_host_amp_index_to_exp_lut_index(uint8_t host_amp_idx)
 {
     unsigned i = host_amp_idx & 127u;
@@ -169,32 +183,6 @@ static unsigned _ns_haptics_clamp_freq_row(uint8_t idx)
     return (unsigned)idx >= NS_LIB_HAPTICS_FREQ_LUT_LEN ? NS_LIB_HAPTICS_FREQ_LUT_LEN - 1u : (unsigned)idx;
 }
 
-void ns_haptics_packet_pair_physical(const ns_haptic_packet_s *packet, unsigned pair_index, float *out_hi_hz,
-                                         float *out_lo_hz, float *out_hi_amplitude, float *out_lo_amplitude)
-{
-    if (packet == NULL || pair_index >= 3u || pair_index >= (unsigned)packet->count)
-    {
-        return;
-    }
-    const ns_haptic_processed_s *p = &packet->pairs[pair_index];
-    if (out_hi_hz != NULL)
-    {
-        *out_hi_hz = p->hi_frequency_hz;
-    }
-    if (out_lo_hz != NULL)
-    {
-        *out_lo_hz = p->lo_frequency_hz;
-    }
-    if (out_hi_amplitude != NULL)
-    {
-        *out_hi_amplitude = p->hi_amplitude;
-    }
-    if (out_lo_amplitude != NULL)
-    {
-        *out_lo_amplitude = p->lo_amplitude;
-    }
-}
-
 const ns_lib_haptic_5bit_cmd_s ns_lib_haptic_cmd_table[] = {
     {.am_action = NS_LIB_HAPTIC_ACTION_DEFAULT, .fm_action = NS_LIB_HAPTIC_ACTION_DEFAULT, .am_offset = 0, .fm_offset = 0},
     {.am_action = NS_LIB_HAPTIC_ACTION_SUBSTITUTE, .fm_action = NS_LIB_HAPTIC_ACTION_IGNORE, .am_offset = 0, .fm_offset = 0},
@@ -274,7 +262,7 @@ static inline uint8_t _apply_command_freq(ns_lib_haptic_action_t action, int16_t
     }
 }
 
-static void _haptics_decode_type_1(const ns_lib_haptic_wire_u *encoded, ns_lib_haptic_raw_state_s *out)
+static void _haptics_decode_type_1(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
     uint8_t samples = encoded->frame_count;
     out->sample_count = samples;
@@ -292,7 +280,7 @@ static void _haptics_decode_type_1(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[0], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[0], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 
     if (samples > 1)
@@ -305,7 +293,7 @@ static void _haptics_decode_type_1(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[1], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[1], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 
     if (samples > 2)
@@ -318,11 +306,11 @@ static void _haptics_decode_type_1(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[2], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[2], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 }
 
-static void _haptics_decode_type_2(const ns_lib_haptic_wire_u *encoded, ns_lib_haptic_raw_state_s *out)
+static void _haptics_decode_type_2(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
     uint8_t samples = encoded->frame_count;
     out->sample_count = samples;
@@ -332,10 +320,10 @@ static void _haptics_decode_type_2(const ns_lib_haptic_wire_u *encoded, ns_lib_h
     out->state.hi_amplitude_idx = _ns_amp_index[encoded->type2.amp_hi & 127u];
     out->state.lo_amplitude_idx = _ns_amp_index[encoded->type2.amp_lo & 127u];
 
-    memcpy(&out->samples[0], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+    memcpy(&out->samples[0], &out->state, sizeof(ns_haptics_sample_raw_s));
 }
 
-static void _haptics_decode_type_3(const ns_lib_haptic_wire_u *encoded, ns_lib_haptic_raw_state_s *out)
+static void _haptics_decode_type_3(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
     ns_lib_haptic_5bit_cmd_s hi_cmd = {0};
     ns_lib_haptic_5bit_cmd_s low_cmd = {0};
@@ -364,7 +352,7 @@ static void _haptics_decode_type_3(const ns_lib_haptic_wire_u *encoded, ns_lib_h
             out->state.hi_amplitude_idx = _apply_command_amp(hi_cmd.am_action, hi_cmd.am_offset, out->state.hi_amplitude_idx);
         }
 
-        memcpy(&out->samples[0], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[0], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 
     if (samples > 1)
@@ -377,11 +365,11 @@ static void _haptics_decode_type_3(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[1], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[1], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 }
 
-static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_lib_haptic_raw_state_s *out)
+static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
     ns_lib_haptic_5bit_cmd_s hi_cmd = {0};
     ns_lib_haptic_5bit_cmd_s low_cmd = {0};
@@ -414,7 +402,7 @@ static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_lib_h
             }
         }
 
-        memcpy(&out->samples[0], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[0], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 
     if (samples > 1)
@@ -427,7 +415,7 @@ static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[1], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[1], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 
     if (samples > 2)
@@ -440,14 +428,17 @@ static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_lib_h
         out->state.lo_frequency_idx = _apply_command_freq(low_cmd.fm_action, low_cmd.fm_offset, out->state.lo_frequency_idx);
         out->state.lo_amplitude_idx = _apply_command_amp(low_cmd.am_action, low_cmd.am_offset, out->state.lo_amplitude_idx);
 
-        memcpy(&out->samples[2], &out->state, sizeof(ns_lib_haptic_raw_sample_s));
+        memcpy(&out->samples[2], &out->state, sizeof(ns_haptics_sample_raw_s));
     }
 }
 
-static ns_lib_haptic_raw_state_s _ns_raw_state;
-
-static void _haptics_decode_samples_apply(const ns_lib_haptic_wire_u *encoded, ns_lib_haptic_raw_state_s *out)
+static void _haptics_decode_samples_apply(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
+    /*
+     * The host can encode rumble updates in a few compact wire formats.
+     * frame_count selects how many sub-samples are present; the remaining bits
+     * determine which decode path reconstructs the new cumulative state.
+     */
     switch (encoded->frame_count)
     {
         case 0:
@@ -504,13 +495,29 @@ void ns_haptics_init(void)
     }
 }
 
+void ns_haptics_convert_raw_to_processed(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out)
+{
+    /*
+     * Keep the raw packet format cheap and hardware-friendly at ingest time,
+     * then offer this helper for firmware that wants float reference values.
+     */
+    for(int i = 0; i < 3; i++)
+    {
+        out->samples[i].hi_amplitude = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].hi_amplitude_idx);
+        out->samples[i].lo_amplitude = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].lo_amplitude_idx);
+        out->samples[i].hi_frequency_hz = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].hi_frequency_idx);
+        out->samples[i].lo_frequency_hz = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].lo_frequency_idx);
+    }
+    out->sample_count = in->sample_count;
+}
+
 void ns_haptics_rumble_translate(const uint8_t *data)
 {
     /*
      * Main integration path:
      *   1) receive raw 4-byte rumble word from host
      *   2) decode into _ns_raw_state.samples[0..2] (INDEXES ONLY)
-     *   3) call ns_set_haptic_indices_cb(samples, sample_count)
+     *   3) call ns_api_hook_set_haptic_packet_raw(&_ns_raw_state)
      *
      * sample_count is 0..3 and each sample carries:
      *   hi_amplitude_idx, lo_amplitude_idx, hi_frequency_idx, lo_frequency_idx
@@ -534,5 +541,34 @@ void ns_haptics_rumble_translate(const uint8_t *data)
     }
 
     // Calls user space function to set haptic samples
-    ns_set_haptic_indices_cb(_ns_raw_state.samples, n);
+    ns_api_hook_set_haptic_packet_raw(&_ns_raw_state);
+}
+
+void ns_haptics_generate_fixedpoint_frequency_step_tables(uint16_t shift, uint16_t sine_table_width, uint16_t sample_rate_hz,
+    uint16_t hi_out[NS_LIB_HAPTICS_FREQ_LUT_LEN], uint16_t lo_out[NS_LIB_HAPTICS_FREQ_LUT_LEN])
+{
+    /* Convert Hz into fixed-point wavetable phase increments ahead of time. */
+    for(int i = 0; i < NS_LIB_HAPTICS_FREQ_LUT_LEN; i++)
+    {
+        float increment;
+        increment = (_ns_tables.frequency_hz_hi[i] * (float)sine_table_width) / (float)sample_rate_hz;
+        hi_out[i] = (uint16_t)(increment * (float)shift + 0.5f);
+
+        increment = (_ns_tables.frequency_hz_lo[i] * (float)sine_table_width) / (float)sample_rate_hz;
+        lo_out[i] = (uint16_t)(increment * (float)shift + 0.5f);
+    }
+}
+
+void ns_haptics_generate_fixedpoint_amplitude_multiplier_table(uint16_t shift, uint16_t out[NS_LIB_HAPTICS_AMP_LUT_LEN])
+{
+    /*
+     * Quantize the float envelope table once so the playback engine can index
+     * directly into a fixed-point gain value at runtime.
+     */
+    for(int i = 0; i < NS_LIB_HAPTICS_AMP_LUT_LEN; i++)
+    {
+        uint16_t tmp = (uint16_t)(_ns_tables.amplitude_linear[i] * (float)shift);
+        if(_ns_tables.amplitude_linear[i]>0 && !tmp) tmp = 1;
+        out[i] = tmp;
+    }
 }

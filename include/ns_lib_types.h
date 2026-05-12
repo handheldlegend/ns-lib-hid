@@ -59,18 +59,54 @@ typedef enum
 /** @brief RGB LED channels for body, grips, and buttons (host-reported or local mirror). */
 typedef struct
 {
-    uint8_t body_r;
-    uint8_t body_g;
-    uint8_t body_b;
-    uint8_t l_grip_r;
-    uint8_t l_grip_g;
-    uint8_t l_grip_b;
-    uint8_t r_grip_r;
-    uint8_t r_grip_g;
-    uint8_t r_grip_b;
-    uint8_t buttons_r;
-    uint8_t buttons_g;
-    uint8_t buttons_b;
+    union
+    {
+        struct
+        {
+            
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } body;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } l_grip;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } r_grip;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } buttons;
 } ns_colordata_s;
 
 typedef struct
@@ -263,7 +299,7 @@ typedef struct
     uint16_t ls_y; // Left Joystick Y Axis (2048 Center)
     uint16_t rs_x; // Right Joystick X Axis (2048 Center)
     uint16_t rs_y; // Right Joystick Y Axis (2048 Center)
-} ns_inputdata_s;
+} ns_input_s;
 
 /** @brief Byte-level 0x30 report input payload (buttons + packed sticks). */
 typedef struct
@@ -317,7 +353,7 @@ typedef struct
     };
     uint8_t left_stick[3];
     uint8_t right_stick[3];
-} ns_inputdata_packed_s;
+} ns_input_packed_s;
 
 /**
  * @brief USB device descriptor in wire layout (little-endian multi-byte fields as @c uint16_t).
@@ -345,6 +381,37 @@ typedef struct{
     uint8_t  bNumConfigurations ; ///< Number of possible configurations.
 } ns_usb_device_descriptor_t;
 #pragma pack(pop)
+
+/** One raw time slice: indices into ns_lib_haptics_tables_s (amplitude rows / frequency rows). */
+typedef struct
+{
+    uint8_t hi_amplitude_idx;
+    uint8_t lo_amplitude_idx;
+    uint8_t hi_frequency_idx;
+    uint8_t lo_frequency_idx;
+} ns_haptics_sample_raw_s;
+
+typedef struct
+{
+    uint8_t sample_count;
+    ns_haptics_sample_raw_s state;
+    ns_haptics_sample_raw_s samples[3];
+} ns_haptics_packet_raw_s;
+
+/** Floats derived from the reference tables. */
+typedef struct
+{
+    float hi_amplitude;
+    float lo_amplitude;
+    float hi_frequency_hz;
+    float lo_frequency_hz;
+} ns_haptics_processed_s;
+
+typedef struct
+{
+    uint8_t sample_count;
+    ns_haptics_processed_s samples[3];
+} ns_haptics_packet_processed_s;
 
 #ifdef __cplusplus
 }

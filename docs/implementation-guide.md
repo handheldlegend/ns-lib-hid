@@ -1,20 +1,21 @@
 # NS-LIB-HID implementation guide
 
-This guide covers practical firmware integration for `NS-LIB-HID` now that core protocol, haptics, SPI emulation, IMU paths, and **HID/USB descriptor blobs** are in place.
+This guide covers practical firmware integration for `NS-LIB-HID`: protocol
+bring-up, descriptor registration, host OUT handling, haptics, and the weak
+platform hooks your firmware is expected to own.
 
 ## 1) Integration model
 
-`NS-LIB-HID` runs as a small stateful protocol engine:
+`NS-LIB-HID` behaves like a small stateful protocol engine:
 
-- You initialize once with `ns_lib_init(...)`.
-- You pass incoming host OUT packets into `ns_api_output_tunnel(...)`.
-- The library queues those packets in a FIFO (depth 3).
-- Your main loop periodically calls `ns_api_generate_inputreport(...)`.
-- Each generate call:
-  - processes at most one queued host command packet (if present), or
-  - emits normal input report `0x30` if no command is pending.
+- initialize it once with `ns_api_init(...)`
+- feed host OUT packets into `ns_api_output_tunnel(...)`
+- call `ns_api_generate_inputreport(...)` on your input-report cadence
+- override the weak `ns_api_hook_*` functions to provide real hardware state
 
-This keeps host command handling deterministic and synchronized with your report cadence.
+The same core API is used for USB and Bluetooth transports. Your transport code
+just moves bytes in and out; the library owns report formatting, subcommand
+handling, SPI-style factory data, and rumble decode.
 
 ## 2) Build and include
 
@@ -25,68 +26,77 @@ add_subdirectory(path/to/NS-LIB-HID)
 target_link_libraries(your_firmware PRIVATE ns_lib_hid)
 ```
 
-Include public API:
+Include the public API:
 
 ```c
 #include "ns_lib.h"
 ```
 
-`ns_lib.h` also pulls in **`ns_lib_hid.h`**, which declares USB/Bluetooth descriptor helpers (see §4).
+`ns_lib.h` also pulls in `ns_lib_hid.h`, which declares the USB / Bluetooth HID
+descriptor helpers described below.
 
 ## 3) One-time initialization
 
-Create and fill `ns_device_config_s`, then call `ns_lib_init(&cfg)`.
+Create and fill `ns_device_config_s`, then call `ns_api_init(&cfg)`.
 
 Required fields:
 
-- `type` (not `NS_DEVTYPE_UNDEFINED`)
-- `transport` (not `NS_TRANSPORT_UNDEFINED`)
-- optional but recommended: `device_mac`, `host_mac`, `colors`
-- `gyro_full_scale_dps` (if <= 0, defaults to 2000 dps)
+- `type` must not be `NS_DEVTYPE_UNDEFINED`
+- `transport` must not be `NS_TRANSPORT_UNDEFINED`
+- `gyro_full_scale_dps` should match your IMU range if motion is used
+
+Recommended fields:
+
+- `device_mac`
+- `host_mac`
+- `colors`
 
 Example:
 
 ```c
 ns_device_config_s cfg = {0};
+
 cfg.type = NS_DEVTYPE_PROCON;
 cfg.transport = NS_TRANSPORT_USB;
 cfg.gyro_full_scale_dps = 2000.0f;
-// fill cfg.device_mac / cfg.host_mac / cfg.colors as needed
 
-ns_config_status_t st = ns_lib_init(&cfg);
-if (st != NS_CONFIG_OK) {
-    // handle configuration error
+// Fill cfg.device_mac / cfg.host_mac / cfg.colors as needed.
+
+ns_config_status_t st = ns_api_init(&cfg);
+if (st != NS_CONFIG_OK)
+{
+    // Handle configuration error.
 }
 ```
 
-Notes:
-
-- `ns_lib_init()` runs config validation, computes `gyro_rad_per_lsb`, initializes analog calibration defaults, and initializes haptics state.
-- If you need to reconfigure at runtime, use `ns_device_config_set(...)`.
-- **`transport` must be valid before descriptor queries succeed** (§4): `NS_TRANSPORT_UNDEFINED` and unsupported values such as `NS_TRANSPORT_UART` cause `ns_hid_get_descriptor_params` to return false.
+`ns_api_init()` validates the configuration, computes derived gyro scaling,
+initializes analog calibration defaults, and installs the built-in haptics
+lookup tables/state.
 
 ## 4) HID and USB descriptor registration
 
-When you register your USB device stack (or inspect what to advertise over Bluetooth HID), use the helpers in **`ns_lib_hid.h`**. They point at **ROM-constant** report and configuration blobs that match common Pro Controller–style layouts.
+When you register your USB device stack, or when you need to inspect what to
+advertise over Bluetooth HID, use the helpers in `ns_lib_hid.h`.
 
-| Symbol | Role |
-|--------|------|
-| `ns_hid_get_device_descriptor()` | Standard **18-byte** USB device descriptor (VID/PID and string indices). |
-| `ns_hid_get_device_name()` | NUL-terminated product name string for strings/USB product/BT friendly name flows. |
-| `ns_hid_get_descriptor_params(...)` | Fills pointers/lengths for the **HID report descriptor** and optional **USB configuration descriptor**, plus **VID/PID**, based on the **configured transport**. |
+- `ns_hid_get_device_descriptor()`
+  Returns the standard 18-byte USB device descriptor.
+- `ns_hid_get_device_name()`
+  Returns the NUL-terminated product name string.
+- `ns_hid_get_descriptor_params(...)`
+  Returns pointers/lengths for the HID report descriptor and, when applicable,
+  the USB configuration descriptor plus VID/PID values.
 
-### `ns_hid_get_descriptor_params` behavior
+`ns_hid_get_descriptor_params(...)` only succeeds after transport has been
+configured. In practice that means `ns_api_init(...)` should run before you ask
+the library for descriptor pointers.
 
-Signature (conceptually): output pointers for HID report bytes + length, USB configuration descriptor + length, VID, PID. **Returns a `bool`:**
+Conceptually:
 
-- **`true`** — Transport is **`NS_TRANSPORT_USB`** or **`NS_TRANSPORT_BTC`**. Outputs are filled:
-  - **USB:** HID report descriptor length **203** bytes; full-speed **configuration descriptor** length **64** bytes.
-  - **Bluetooth:** HID report descriptor length **170** bytes; **no** USB configuration (configuration pointer is NULL, length **0**).
-- **`false`** — Transport is still **`NS_TRANSPORT_UNDEFINED`**, or **`NS_TRANSPORT_UART`**, or any other unsupported value. **Do not use stale outputs:** every non-NULL output you passed in is cleared (NULL pointer and/or zero length; VID/PID set to 0).
+- USB transport returns both HID and USB configuration descriptors
+- Bluetooth transport returns the HID descriptor only
+- unsupported or unset transport clears the outputs and returns `false`
 
-**Call order:** Run **`ns_lib_init`** (or at least **`ns_device_config_set`** with a valid **`transport`**) **before** `ns_hid_get_descriptor_params`, or the call will fail until configuration is present.
-
-Example (USB stack wiring — pseudocode):
+Example:
 
 ```c
 const ns_usb_device_descriptor_t *dev = ns_hid_get_device_descriptor();
@@ -94,16 +104,17 @@ const uint8_t *hid = NULL;
 uint16_t hid_len = 0;
 const uint8_t *cfg = NULL;
 uint16_t cfg_len = 0;
-uint16_t vid = 0, pid = 0;
+uint16_t vid = 0;
+uint16_t pid = 0;
 
-if (!ns_hid_get_descriptor_params(&hid, &hid_len, &cfg, &cfg_len, &vid, &pid)) {
-    // transport not set or unsupported — fix cfg.transport first
+if (!ns_hid_get_descriptor_params(&hid, &hid_len, &cfg, &cfg_len, &vid, &pid))
+{
+    // transport not configured or unsupported
     return;
 }
-// Pass dev, hid/hid_len, cfg/cfg_len into your USB descriptor callbacks / registration.
-```
 
-For Bluetooth stacks, you typically consume **`hid` / `hid_len`** (and VID/PID if your stack exposes them); **`cfg`** remains unused (NULL / 0).
+// Register dev / hid / cfg with your USB or Bluetooth stack.
+```
 
 ## 5) Host OUT path
 
@@ -113,113 +124,169 @@ Feed every received host OUT packet to:
 ns_api_output_tunnel(out_data, out_len);
 ```
 
-Behavior:
+Two things happen on that path:
 
-- Data is forwarded into the protocol layer and may be **queued** in a FIFO (max 3 packets).
-- Processing is deferred to generate-time.
-- If the FIFO is full, **additional packets may be dropped**; avoid starving the generate loop under bursty host traffic.
+- rumble bytes are decoded immediately if the packet carries haptics
+- the protocol packet is queued so command handling can be serviced on the
+  normal input-report cadence
 
-Recommended firmware policy:
+The command FIFO depth is 8 packets. If your generate loop falls behind during
+bursty host traffic, excess packets may be dropped.
 
-- Call `ns_api_output_tunnel(...)` as soon as OUT data arrives.
-- Keep generate cadence high enough to drain the queue under bursty host traffic.
+Recommended policy:
 
-## 6) Generate path (main loop)
+- call `ns_api_output_tunnel(...)` as soon as OUT data arrives
+- maintain an input-report cadence close to 8 ms when possible so host behavior
+  stays predictable and queued commands are drained promptly
 
-Call this on your normal report tick. The buffer must be **at least 64 bytes**; the library fills a full 64-byte Switch-style report (report ID at byte 0, payload follows).
+## 6) Generate path
+
+Call `ns_api_generate_inputreport(...)` on your normal input-report tick with a
+64-byte buffer. A cadence of about 8 ms is recommended.
 
 ```c
 uint8_t tx[64] = {0};
-ns_api_generate_inputreport(tx, sizeof(tx));
+bool ok = ns_api_generate_inputreport(tx);
 ```
 
-Output:
+When `ok` is `true`:
 
-- `tx[0]` = report ID
-- `tx[1..63]` = payload
+- `tx[0]` contains the report ID
+- `tx[1..63]` contains the payload
 
-If a command/info packet is queued, generated output is a command reply (`0x21` or `0x81`) with command effects applied in FIFO order.
-If the queue is empty, generated output is normal report `0x30`.
+If a queued command/info packet is pending, the output is a command reply.
+Otherwise the library emits the normal `0x30` input report.
 
-## 7) Required callback overrides
+## 7) Haptics integration
 
-The library provides weak defaults; real products should override these in platform code:
+Haptics are decoded on the OUT path, not on the generate path.
 
-- `ns_get_inputdata_cb(ns_inputdata_s *out)`
-  - Fill buttons and packed sticks.
-- `ns_get_powerstatus_cb(ns_powerstatus_s *out)`
-  - Set battery/charging/connection byte.
-- `ns_get_imu_standard_cb(ns_gyrodata_s *out)` (if IMU standard mode enabled)
-- `ns_get_imu_quaternion_cb(ns_quaternion_s *out)` (if IMU mode-2 enabled)
+When a host packet contains rumble data:
 
-Useful host-effect callbacks:
+1. the 4-byte rumble word is decoded immediately
+2. the library updates its running raw haptics state
+3. `ns_api_hook_set_haptic_packet_raw(...)` is called with the decoded packet
 
-- `ns_set_led_cb(int player_leds)`
-- `ns_set_imumode_cb(ns_imu_mode_t mode)`
-- `ns_set_haptic_indices_cb(...)`
-- `ns_set_power_cb(uint8_t shutdown)`
-- `ns_set_usbpair_cb(...)`
+The raw packet is intentionally hardware-friendly:
 
-Platform utility hooks:
+- `packet->state` holds the current cumulative hi/lo band state
+- `packet->samples[0..sample_count-1]` holds up to three sequential sub-samples
+- each field is a lookup-table index, not a float amplitude or frequency
 
-- `ns_get_time_ms(uint64_t *ms)`
-- `ns_get_random_u8(void)`
+From there you have two common integration models.
 
-## 8) Stick packing and calibration
+### Raw-index / fixed-point path
 
-For 12-bit Switch nibble layout use:
+This is the fastest option for hardware-specific playback engines.
 
-- `ns_analog_pack_xy12(x, y, out3)`
+At startup:
 
-Byte mapping:
+- call `ns_api_generate_fp_haptic_frequency_tables(...)`
+- call `ns_api_generate_fp_amplitude_multiplier_table(...)`
 
-- `out3[0] = x[7:0]`
-- `out3[1] = x[11:8] | y[3:0] << 4`
-- `out3[2] = y[11:4]`
+At runtime:
 
-Calibration blob for SPI stick pages is initialized by `ns_analog_calibration_init()` during `ns_lib_init()`.
+- use the decoded indices from `ns_api_hook_set_haptic_packet_raw(...)`
+- index directly into your precomputed fixed-point tables
+- feed those results into your PWM, DDS, wavetable, or timer-based actuator path
 
-## 9) IMU and gyro scaling
+### Processed-float path
 
-Set `cfg.gyro_full_scale_dps` for your IMU range (for example 2000 for +-2000 dps).
-`NS-LIB-HID` derives `gyro_rad_per_lsb` once during config set:
+This is useful for debug tooling, software synthesis, or an abstraction layer
+that wants float reference values.
 
-- `rad/s per LSB = (full_scale_dps / 32768) * (pi/180)`
+- inside `ns_api_hook_set_haptic_packet_raw(...)`, call
+  `ns_api_convert_haptic_packet(...)`
+- consume the returned amplitude/frequency values instead of the raw indices
 
-Quaternion integration helpers consume this precomputed scalar.
+Both paths can coexist. A common pattern is to use the raw path in production
+and the float path for diagnostics or visualization.
 
-## 10) Minimal loop template
+## 8) Platform hooks to override
+
+The library provides weak defaults so it can link out of the box, but a real
+product should supply strong replacements for most of these:
+
+- `ns_api_hook_get_time_ms(uint64_t *ms)`
+  Monotonic millisecond clock used for report timing.
+- `ns_api_hook_get_random_u8(void)`
+  Non-cryptographic random byte source used in pairing-related flows.
+- `ns_api_hook_get_input(ns_input_s *out)`
+  Buttons and unpacked stick values; the library packs them into the report
+  format internally.
+- `ns_api_hook_get_powerstatus(ns_powerstatus_s *out)`
+  Battery / charging / connection reporting.
+- `ns_api_hook_set_led(int player_leds)`
+  Apply host-selected player LED state.
+- `ns_api_hook_set_power(uint8_t shutdown)`
+  Respond to host shutdown requests.
+- `ns_api_hook_set_usbpair(ns_usbpair_s pairing_data)`
+  Persist pairing material if your product supports reconnect behavior.
+- `ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode)`
+  React to host IMU mode changes.
+- `ns_api_hook_get_imu(ns_gyrodata_s *out)`
+  Provide standard IMU samples.
+- `ns_api_hook_get_quaternion(ns_quaternion_s *out)`
+  Provide quaternion state for mode-2 motion reporting.
+- `ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet)`
+  Consume decoded rumble data.
+
+## 9) Input representation and calibration
+
+`ns_api_hook_get_input(...)` works with `ns_input_s`, which carries button
+state plus unpacked stick positions. Firmware should populate those logical
+values and let the library handle the Switch-specific stick packing internally
+during report generation.
+
+Calibration data for the SPI pages is initialized by
+`ns_analog_calibration_init()` during `ns_api_init()`.
+
+## 10) IMU and gyro scaling
+
+Set `cfg.gyro_full_scale_dps` to match your sensor range, for example `2000`
+for +-2000 dps operation.
+
+The library derives `gyro_rad_per_lsb` from that setting during configuration
+so report generation and motion helpers can consume a precomputed scale.
+
+## 11) Minimal loop template
 
 ```c
 void on_host_out_packet(const uint8_t *data, uint16_t len)
 {
-    ns_api_output_tunnel((uint8_t *)data, len);
+    ns_api_output_tunnel(data, len);
 }
 
 void protocol_tick(void)
 {
     uint8_t report[64] = {0};
-    ns_api_generate_inputreport(report, sizeof(report));
-    transport_send(report, sizeof(report)); // USB/BT send path
+
+    if (ns_api_generate_inputreport(report))
+    {
+        transport_send(report, sizeof(report));
+    }
 }
 ```
 
-## 11) Common pitfalls
+## 12) Common pitfalls
 
-- Calling generate too slowly while host sends multiple commands quickly (FIFO can overflow).
-- Not overriding weak callbacks, causing all-zero input and placeholder state.
-- Forgetting to set `type`/`transport` before `ns_lib_init()`.
-- Calling **`ns_hid_get_descriptor_params`** before **`transport`** is configured, or using **`NS_TRANSPORT_UART`**, and ignoring the **`false`** return — you must not feed NULL/zero-length descriptor pointers into your stack.
-- Passing a **buffer shorter than 64 bytes** to `ns_api_generate_inputreport` (the function will not fill a short buffer).
-- Mixing API names from older trees; standardize on `NS-LIB-HID` symbols in your firmware (`ns_api_*`, `ns_lib_init`, descriptor helpers in `ns_lib_hid.h`).
+- Calling the generate loop too slowly while the host sends bursts of commands.
+- Forgetting to override the weak hooks, which leaves placeholder input,
+  power, IMU, and haptics behavior in place.
+- Requesting descriptors before `transport` has been configured.
+- Treating decoded rumble values as physical units when they are still lookup
+  indices.
+- Using older symbol names from previous iterations of the library instead of
+  the current `ns_api_*` / `ns_api_hook_*` surface.
 
-## 12) Bring-up checklist
+## 13) Bring-up checklist
 
-- Build links with `ns_lib_hid`.
-- `ns_lib_init()` returns `NS_CONFIG_OK`.
-- **USB:** After init, `ns_hid_get_descriptor_params` returns true and your stack receives non-NULL HID (and configuration) pointers with the expected lengths.
-- **Bluetooth:** Same, with configuration descriptor absent (NULL / 0) and 170-byte HID report descriptor.
-- OUT packets are passed into `ns_api_output_tunnel()`.
-- Generate loop calls `ns_api_generate_inputreport()` with a **64-byte** buffer at a steady interval.
-- Verified command bursts (up to 3) are handled in-order.
-- Verified idle behavior emits `0x30` input reports.
+- Build links against `ns_lib_hid`.
+- `ns_api_init()` returns `NS_CONFIG_OK`.
+- Descriptor registration succeeds after transport is configured.
+- Every host OUT packet is forwarded to `ns_api_output_tunnel()`.
+- `ns_api_generate_inputreport()` is called with a 64-byte buffer at a cadence
+  close to 8 ms.
+- Your platform overrides provide real input, power, and persistence behavior.
+- Haptics are either consumed directly from raw indices or mapped through one of
+  the provided helper paths.
