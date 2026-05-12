@@ -19,98 +19,19 @@
 #include "ns_lib_spi.h"
 #include "ns_lib_hid.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* --- Weak callbacks (user override points) --- */
+/* --- API Functions --- */
 
 /**
- * @brief Decoded HD-rumble index tuples callback (weak, user-overridable).
- * @param pairs Up to three decoded samples (index-only values).
- * @param pair_count Number of valid entries in @p pairs (0..3).
- */
-void ns_set_haptic_indices_cb(const ns_lib_haptic_raw_sample_s *pairs, uint8_t pair_count);
-
-/**
- * @brief Host-set player LED callback (weak, user-overridable).
+ * @brief One-shot initialize: apply device config, then initialize runtime state.
  *
- * @param player_leds Host player slot `1`–`8` from SET_PLAYER decoding, or `-1` when disconnected /
- *                    no valid assignment (unknown bitmask / cleared LEDs).
+ * @param cfg Device configuration to apply.
+ * @return `NS_CONFIG_OK` on success; validation error otherwise.
  */
-void ns_set_led_cb(int player_leds);
-
-/** @brief Host power-state request callback (weak, user-overridable). */
-void ns_set_power_cb(uint8_t shutdown);
-
-/** @brief USB pairing data callback (weak, user-overridable). */
-void ns_set_usbpair_cb(ns_usbpair_s pairing_data);
-
-/** @brief IMU Mode Setter. */
-void ns_set_imumode_cb(ns_imu_mode_t mode);
-
-/**
- * @brief Fill battery / USB status for input report byte @c 1 (weak, user-overridable).
- *
- * Set @ref ns_powerstatus_s bitfields (or assign @c out->val directly). Layout matches HOJA
- * `bat_status_u` / Switch Pro Controller wire format.
- *
- * @param out Output status; ignored if NULL.
- */
-void ns_get_powerstatus_cb(ns_powerstatus_s *out);
-
-/**
- * @brief Fill packed input byte groups when needed (weak, user-overridable).
- * @param out Output button/stick packed bytes.
- */
-void ns_get_inputdata_cb(ns_inputdata_s *out);
-
-/**
- * @brief Fill one IMU sample for standard mode reports (weak, user-overridable).
- * @param out Output gyro/accel sample.
- */
-void ns_get_imu_standard_cb(ns_gyrodata_s *out);
-
-/**
- * @brief Fill quaternion state for IMU mode-2 reports (weak, user-overridable).
- *
- * Default weak implementation integrates from `ns_get_imu_raw_cb()`.
- */
-void ns_get_imu_quaternion_cb(ns_quaternion_s *out);
-
-/**
- * @defgroup ns_platform_hooks Platform hooks (weak)
- *
- * Optional firmware-provided symbols with the same names replace these defaults (GNU `weak`, or your
- * toolchain’s equivalent). Used for time, RNG, and IMU report packing—**not** host commands. Battery /
- * USB byte @c [1] comes from @ref ns_get_powerstatus_cb only.
- * @{
- */
-
-/**
- * @brief Monotonic time in milliseconds (weak).
- *
- * Default advances a counter each call. Firmware should set `*ms` from a hardware timer or RTOS tick.
- *
- * @param[out] ms Elapsed milliseconds; ignored if NULL.
- */
-void ns_get_time_ms(uint64_t *ms);
-
-/**
- * @brief Non-cryptographic random byte (weak).
- *
- * Used for Bluetooth LTK placeholder generation during pairing. Replace with a hardware RNG or CSPRNG
- * if your product requires it.
- *
- * @return Uniform-ish byte in 0..255.
- */
-uint8_t ns_get_random_u8(void);
-
-
-/** @} */
-
-/* --- Protocol-facing entry points --- */
+ns_config_status_t ns_api_init(const ns_device_config_s *cfg);
 
 /**
  * @brief Build one outgoing input report payload in-place.
@@ -120,19 +41,120 @@ uint8_t ns_get_random_u8(void);
  * @param data[64] Output buffer of 64 bytes size.*/
 bool ns_api_generate_inputreport(uint8_t data[64]);
 
-
+/**
+ * @brief Send raw output tunnel data to the USB/HID transport layer.
+ *
+ * @param data Pointer to the output packet payload.
+ * @param len Length of the packet in bytes.
+ */
 void ns_api_output_tunnel(const uint8_t *data, uint16_t len);
 
 /**
- * @brief One-shot initialize: apply device config, then initialize runtime state.
- *
- * This combines configuration and startup so callers do not need a separate
- * `ns_device_config_set()` step before initialization.
- *
- * @param cfg Device configuration to apply.
- * @return `NS_CONFIG_OK` on success; validation error otherwise.
+ * @brief Decoded HD-rumble index tuples callback (weak, user-overridable).
+ * @param pairs Up to three decoded samples (float-only values).
+ * @param pair_count Number of valid entries in @p pairs (0..3).
  */
-ns_config_status_t ns_lib_init(const ns_device_config_s *cfg);
+void ns_api_convert_haptic_packet(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out);
+
+/* --- API Platform Hook Functions --- */
+
+/**
+ * @brief Monotonic time in milliseconds (weak).
+ *
+ * Firmware must set `*ms` based on the MCUs system time. Example: Time since boot. 
+ *
+ * @param[out] ms Elapsed milliseconds; ignored if NULL.
+ */
+void ns_api_hook_get_time_ms(uint64_t *ms);
+
+/**
+ * @brief Non-cryptographic random byte (weak).
+ *
+ * Used for Bluetooth Link Key placeholder generation during pairing. Replace with a hardware RNG or CSPRNG
+ * if your product requires it.
+ *
+ * @return Uniform-ish byte in 0..255.
+ */
+uint8_t ns_api_hook_get_random_u8(void);
+
+/**
+ * @brief Decoded HD-rumble index tuples callback (weak, user-overridable).
+ * @param pairs Up to three decoded samples (index-only values).
+ * @param pair_count Number of valid entries in @p pairs (0..3).
+ */
+void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s packet);
+
+/**
+ * @brief Host-set player LED callback (weak, user-overridable).
+ *
+ * @param player_leds Host player slot `1`–`8` from SET_PLAYER decoding, or `-1` when disconnected /
+ *                    no valid assignment (unknown bitmask / cleared LEDs).
+ */
+void ns_api_hook_set_led(int player_leds);
+
+/** @brief Host power-state request callback (weak, user-overridable). */
+void ns_api_hook_set_power(uint8_t shutdown);
+
+/** @brief USB pairing data callback (weak, user-overridable). */
+void ns_api_hook_set_usbpair(ns_usbpair_s pairing_data);
+
+/**
+ * @brief Fill battery / USB status for input report byte @c 1 (weak, user-overridable).
+ *
+ * Set @ref ns_powerstatus_s bitfields (or assign @c out->val directly). Layout matches HOJA
+ * `bat_status_u` / Switch Pro Controller wire format.
+ *
+ * @param out Output status; ignored if NULL.
+ */
+void ns_api_hook_get_powerstatus(ns_powerstatus_s *out);
+
+/** @brief IMU Mode Setter.
+ *
+ * Set the IMU report mode.
+ * 0 = disabled, 1 = raw IMU samples, 2 = quaternion.
+ */
+void ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode);
+
+/**
+ * @brief Fill IMU sample for standard mode reports (weak, user-overridable).
+ * @param out Output gyro/accel sample.
+ */
+void ns_api_hook_get_imu(ns_gyrodata_s *out);
+
+/**
+ * @brief Fill quaternion state for IMU mode-2 reports (weak, user-overridable).
+ */
+void ns_api_hook_get_quaternion(ns_quaternion_s *out);
+
+/**
+ * @brief Fill packed input byte groups when needed (weak, user-overridable).
+ * @param out Output button/stick raw bytes.
+ */
+void ns_api_hook_get_input(ns_input_s *out);
+
+/**
+ * @brief Get stored USB/Bluetooth link key (weak, user-overridable).
+ *
+ * @param out Output buffer for a 16-byte link key.
+ * @return true when the key is available, false otherwise.
+ */
+bool ns_api_hook_get_link_key(uint8_t out[16]);
+
+/**
+ * @brief Get the gamepad MAC address (weak, user-overridable).
+ *
+ * @param out Output buffer for a 6-byte MAC address.
+ * @return true when the MAC address is available, false otherwise.
+ */
+bool ns_api_hook_get_gamepad_mac(uint8_t out[6]);
+
+/**
+ * @brief Get the target host MAC address (weak, user-overridable).
+ *
+ * @param out Output buffer for a 6-byte MAC address.
+ * @return true when the MAC address is available, false otherwise.
+ */
+bool ns_api_hook_get_host_mac(uint8_t out[6]);
 
 #ifdef __cplusplus
 }

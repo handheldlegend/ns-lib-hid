@@ -47,7 +47,7 @@ static ns_haptic_defaults_s _ns_haptic_defaults = {
 #define AMPLITUDE_INTERVAL       0.03125f
 #define STARTING_AMPLITUDE_FLOAT -7.9375f
 
-void _ns_haptics_build_raw_tables(ns_lib_haptics_tables_s *out)
+void _ns_haptics_build_raw_tables(ns_haptics_tables_s *out)
 {
     if (out == NULL)
     {
@@ -69,7 +69,7 @@ void _ns_haptics_build_raw_tables(ns_lib_haptics_tables_s *out)
 }
 
 /** Zero until @ref _ns_haptics_install_builtin_tables (via @ref ns_haptics_init); lookup helpers read these LUTs as-is. */
-static ns_lib_haptics_tables_s _ns_tables = {0};
+static ns_haptics_tables_s _ns_tables = {0};
 static uint8_t _ns_amp_index[128] = {0};
 static uint64_t _ns_haptic_packet_counter;
 

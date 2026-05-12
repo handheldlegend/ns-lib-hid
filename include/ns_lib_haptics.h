@@ -97,21 +97,20 @@ typedef union
     } type4;
 } __attribute__((packed)) ns_lib_haptic_wire_u;
 
-/** One decoded time slice: indices into ns_lib_haptics_tables_s (amplitude rows / frequency rows). */
+/** One raw time slice: indices into ns_lib_haptics_tables_s (amplitude rows / frequency rows). */
 typedef struct
 {
     uint8_t hi_amplitude_idx;
     uint8_t lo_amplitude_idx;
     uint8_t hi_frequency_idx;
     uint8_t lo_frequency_idx;
-} ns_lib_haptic_raw_sample_s;
+} ns_haptics_sample_raw_s;
 
 typedef struct
 {
     uint8_t sample_count;
-    ns_lib_haptic_raw_sample_s state;
-    ns_lib_haptic_raw_sample_s samples[3];
-} ns_lib_haptic_raw_state_s;
+    ns_haptics_sample_raw_s samples[3];
+} ns_haptics_packet_raw_s;
 
 /** Floats derived from the reference tables. */
 typedef struct
@@ -120,14 +119,13 @@ typedef struct
     float lo_amplitude;
     float hi_frequency_hz;
     float lo_frequency_hz;
-} ns_haptic_processed_s;
+} ns_haptics_processed_s;
 
 typedef struct
 {
-    ns_haptic_processed_s pairs[3];
-    uint8_t count;
-    uint64_t counter;
-} ns_haptic_packet_s;
+    uint8_t sample_count;
+    ns_haptics_processed_s samples[3];
+} ns_haptics_packet_processed_s;
 
 /** Rows in the exp₂ amplitude envelope LUT. */
 #define NS_LIB_HAPTICS_AMP_LUT_LEN 256u
@@ -143,7 +141,7 @@ typedef struct
  * PCM phase increments and Q-format amplitudes are not stored here — generate those in your PCM driver
  * from frequency_hz_* and amplitude_linear if needed.
  */
-typedef struct ns_lib_haptics_tables_s
+typedef struct
 {
     /** Unitless exp₂ envelope sample per row (0 below library cutoff). Indexed by decoded amplitude index. */
     float amplitude_linear[NS_LIB_HAPTICS_AMP_LUT_LEN];
@@ -151,14 +149,23 @@ typedef struct ns_lib_haptics_tables_s
     float frequency_hz_hi[NS_LIB_HAPTICS_FREQ_LUT_LEN];
     /** Synthesized sine frequency (Hz) for the low haptic band. */
     float frequency_hz_lo[NS_LIB_HAPTICS_FREQ_LUT_LEN];
-} ns_lib_haptics_tables_s;
+} ns_haptics_tables_s;
 
 /**
- * @brief Copy floats from one decoded pair (after ns_haptics_dispatch_hd packet build).
+ * @brief Return raw index haptic packets
  */
-void ns_haptics_packet_pair_physical(const ns_haptic_packet_s *packet, unsigned pair_index,
-                                         float *out_hi_hz, float *out_lo_hz, float *out_hi_amplitude,
-                                         float *out_lo_amplitude);
+void ns_haptics_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet);
+
+/**
+ * @brief Convert a raw haptic packet with table indices into processed values.
+ *
+ * Translates amplitude and frequency indices from the raw packet into linear
+ * amplitude and frequency values using the library's lookup tables.
+ *
+ * @param in   Source raw packet containing amplitude/frequency indices.
+ * @param out  Destination processed packet to receive converted values.
+ */
+void ns_haptics_convert_raw_to_processed(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out);
 
 void ns_haptics_init(void);
 

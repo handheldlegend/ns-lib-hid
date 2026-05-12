@@ -263,7 +263,7 @@ typedef struct
     uint16_t ls_y; // Left Joystick Y Axis (2048 Center)
     uint16_t rs_x; // Right Joystick X Axis (2048 Center)
     uint16_t rs_y; // Right Joystick Y Axis (2048 Center)
-} ns_inputdata_s;
+} ns_input_s;
 
 /** @brief Byte-level 0x30 report input payload (buttons + packed sticks). */
 typedef struct
@@ -317,7 +317,7 @@ typedef struct
     };
     uint8_t left_stick[3];
     uint8_t right_stick[3];
-} ns_inputdata_packed_s;
+} ns_input_packed_s;
 
 /**
  * @brief USB device descriptor in wire layout (little-endian multi-byte fields as @c uint16_t).

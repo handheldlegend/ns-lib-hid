@@ -19,106 +19,6 @@
 #include "ns_lib.h"
 #include "ns_lib_protocol.h"
 
-__attribute__((weak)) void ns_set_haptic_indices_cb(const ns_lib_haptic_raw_sample_s *pairs, uint8_t pair_count)
-{
-    (void)pairs;
-    (void)pair_count;
-}
-
-__attribute__((weak)) void ns_set_led_cb(int player_leds)
-{
-    (void)player_leds;
-}
-
-__attribute__((weak)) void ns_set_power_cb(uint8_t shutdown)
-{
-    (void)shutdown;
-}
-
-__attribute__((weak)) void ns_set_usbpair_cb(ns_usbpair_s pairing_data)
-{
-    (void)pairing_data;
-}
-
-__attribute__((weak)) void ns_set_imumode_cb(ns_imu_mode_t imu_mode)
-{
-    (void)imu_mode;
-}
-
-
-__attribute__((weak)) void ns_get_powerstatus_cb(ns_powerstatus_s *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, sizeof(*out));
-    out->bat_lvl = 4;
-    out->power_source = 1;
-    out->connection = 1;
-    out->charging = 0;
-    out->reserved = 0;
-}
-
-__attribute__((weak)) void ns_get_imu_raw_cb(ns_gyrodata_s *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, sizeof(*out));
-}
-
-__attribute__((weak)) void ns_get_inputdata_cb(ns_inputdata_s *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, sizeof(*out));
-    out->ls_x = 2048;
-    out->ls_y = 2048;
-    out->rs_x = 2048;
-    out->rs_y = 2048;
-}
-
-__attribute__((weak)) void ns_linkkey_get_cb(uint8_t *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, 16);
-}
-
-__attribute__((weak)) void ns_devmac_get_cb(uint8_t *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, 6);
-}
-
-__attribute__((weak)) void ns_hostmac_get_cb(uint8_t *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    memset(out, 0, 6);
-}
-
-__attribute__((weak)) void ns_get_imu_quaternion_cb(ns_quaternion_s *out)
-{
-    if (!out)
-    {
-        return;
-    }
-    static ns_quaternion_s quat_state = {.raw = {0.f, 0.f, 0.f, 1.f}};
-    *out = quat_state;
-}
-
 ns_config_status_t ns_api_init(const ns_device_config_s *cfg)
 {
     ns_config_status_t st = ns_device_config_set(cfg);
@@ -140,11 +40,6 @@ bool ns_api_generate_inputreport(uint8_t data[64])
     return ns_protocol_generate_inputreport(data);
 }
 
-ns_config_status_t ns_lib_init(const ns_device_config_s *cfg)
-{
-    return ns_api_init(cfg);
-}
-
 void ns_api_output_tunnel(const uint8_t *data, uint16_t len)
 {
     if (data == NULL || len == 0u)
@@ -154,10 +49,15 @@ void ns_api_output_tunnel(const uint8_t *data, uint16_t len)
     ns_protocol_process_outputreport(data, len);
 }
 
+void ns_api_convert_haptic_packet(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out)
+{
+    ns_haptics_convert_raw_to_processed(in, out);
+}
+
 /*
  * Platform hooks (declared in ns_lib_api.h): weak definitions — firmware should supply strong replacements.
  */
-__attribute__((weak)) void ns_get_time_ms(uint64_t *ms)
+__attribute__((weak)) void ns_api_hook_get_time_ms(uint64_t *ms)
 {
     static uint64_t t;
     if (!ms)
@@ -168,9 +68,99 @@ __attribute__((weak)) void ns_get_time_ms(uint64_t *ms)
     *ms = t;
 }
 
-__attribute__((weak)) uint8_t ns_get_random_u8(void)
+__attribute__((weak)) uint8_t ns_api_hook_get_random_u8(void)
 {
     static uint16_t s = 0xACE1u;
     s = (uint16_t)(s * 1103515245u + 12345u);
     return (uint8_t)(s >> 8);
+}
+
+__attribute__((weak)) void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s packet)
+{
+    (void)packet;
+}
+
+__attribute__((weak)) void ns_api_hook_set_led(int player_leds)
+{
+    (void)player_leds;
+}
+
+__attribute__((weak)) void ns_api_hook_set_power(uint8_t shutdown)
+{
+    (void)shutdown;
+}
+
+__attribute__((weak)) void ns_api_hook_set_usbpair(ns_usbpair_s pairing_data)
+{
+    (void)pairing_data;
+}
+
+__attribute__((weak)) void ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode)
+{
+    (void)imu_mode;
+}
+
+
+__attribute__((weak)) void ns_api_hook_get_powerstatus(ns_powerstatus_s *out)
+{
+    if (!out)
+    {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    out->bat_lvl = 4;
+    out->power_source = 1;
+    out->connection = 1;
+    out->charging = 0;
+    out->reserved = 0;
+}
+
+__attribute__((weak)) void ns_api_hook_get_imu(ns_gyrodata_s *out)
+{
+    if (!out)
+    {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+}
+
+__attribute__((weak)) void ns_api_hook_get_quaternion(ns_quaternion_s *out)
+{
+    if (!out)
+    {
+        return;
+    }
+    static ns_quaternion_s quat_state = {.raw = {0.f, 0.f, 0.f, 1.f}};
+    *out = quat_state;
+}
+
+__attribute__((weak)) void ns_api_hook_get_input(ns_input_s *out)
+{
+    if (!out)
+    {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    out->ls_x = 2048;
+    out->ls_y = 2048;
+    out->rs_x = 2048;
+    out->rs_y = 2048;
+}
+
+__attribute__((weak)) bool ns_api_hook_get_link_key(uint8_t out[16])
+{
+    (void)&out;
+    return false;
+}
+
+__attribute__((weak)) bool ns_api_hook_get_gamepad_mac(uint8_t out[6])
+{
+    (void)&out;
+    false;
+}
+
+__attribute__((weak)) bool ns_api_hook_get_host_mac(uint8_t out[6])
+{
+    (void)&out;
+    return false;
 }
