@@ -1,6 +1,6 @@
 /**
  * @file ns_lib_haptics.h
- * @brief HD rumble decode + float reference lookup tables (indices → Hz / amplitude).
+ * @brief HD rumble decode helpers plus float/fixed-point lookup-table utilities.
  *
  * Copyright (c) 2026 Mitchell Cairns, Hand Held Legend, LLC.
  *
@@ -122,7 +122,12 @@ typedef struct
 } ns_haptics_tables_s;
 
 /**
- * @brief Return raw index haptic packets
+ * @brief Forward a decoded raw haptics packet to user space.
+ *
+ * This is the low-level dispatch point used by the decoder once a host rumble
+ * word has been expanded into one library packet. Most firmware should
+ * override @ref ns_api_hook_set_haptic_packet_raw instead of calling this
+ * function directly.
  */
 void ns_haptics_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet);
 
@@ -137,8 +142,43 @@ void ns_haptics_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet);
  */
 void ns_haptics_convert_raw_to_processed(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out);
 
+/**
+ * @brief Build fixed-point phase-step lookup tables for decoded frequency rows.
+ *
+ * Each output entry is derived from the library's internal Hz reference table
+ * and scaled for a DDS / wavetable playback engine.
+ *
+ * @param shift Fixed-point scale factor, typically `1u << Q`.
+ * @param sine_table_width Number of samples in the oscillator wavetable.
+ * @param sample_rate_hz PCM update rate used by the playback engine.
+ * @param hi_out Output table for the high-band frequency rows.
+ * @param lo_out Output table for the low-band frequency rows.
+ */
+void ns_haptics_generate_fixedpoint_frequency_step_tables(uint16_t shift, uint16_t sine_table_width, uint16_t sample_rate_hz,
+    uint16_t hi_out[NS_LIB_HAPTICS_FREQ_LUT_LEN], uint16_t lo_out[NS_LIB_HAPTICS_FREQ_LUT_LEN]);
+
+/**
+ * @brief Build a fixed-point amplitude multiplier table for decoded amplitude rows.
+ *
+ * This is intended for playback engines that want to index directly from the
+ * decoded amplitude row to a pre-scaled fixed-point gain value.
+ *
+ * @param shift Fixed-point scale factor, typically `1u << Q`.
+ * @param out Output table indexed by decoded amplitude row.
+ */
+void ns_haptics_generate_fixedpoint_amplitude_multiplier_table(uint16_t shift, uint16_t out[NS_LIB_HAPTICS_AMP_LUT_LEN]);
+
+/** @brief Initialize the built-in haptics lookup tables and raw decode state. */
 void ns_haptics_init(void);
 
+/**
+ * @brief Decode one 4-byte host rumble word into raw haptics indices.
+ *
+ * The decoder preserves running hi/lo state between packets and dispatches the
+ * resulting raw packet through the haptics callback path.
+ *
+ * @param data Pointer to the 4-byte rumble payload from the host report.
+ */
 void ns_haptics_rumble_translate(const uint8_t *data);
 
 #ifdef __cplusplus

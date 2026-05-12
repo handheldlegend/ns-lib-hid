@@ -54,6 +54,17 @@ void ns_api_convert_haptic_packet(ns_haptics_packet_raw_s *in, ns_haptics_packet
     ns_haptics_convert_raw_to_processed(in, out);
 }
 
+void ns_api_generate_fp_haptic_frequency_tables(uint16_t shift, uint16_t sine_table_width, uint16_t sample_rate_hz,
+    uint16_t hi_out[128], uint16_t lo_out[128])
+{
+    ns_haptics_generate_fixedpoint_frequency_step_tables(shift, sine_table_width, sample_rate_hz, hi_out, lo_out);
+}
+
+void ns_api_generate_fp_amplitude_multiplier_table(uint16_t shift, uint16_t out[256])
+{
+    ns_haptics_generate_fixedpoint_amplitude_multiplier_table(shift, out);
+}
+
 void ns_api_motion_update_quaternion(ns_quaternion_s *state, ns_gyrodata_s *sample)
 {
     static ns_motion_quat_integrator_s integrator = {0};

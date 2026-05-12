@@ -59,18 +59,54 @@ typedef enum
 /** @brief RGB LED channels for body, grips, and buttons (host-reported or local mirror). */
 typedef struct
 {
-    uint8_t body_r;
-    uint8_t body_g;
-    uint8_t body_b;
-    uint8_t l_grip_r;
-    uint8_t l_grip_g;
-    uint8_t l_grip_b;
-    uint8_t r_grip_r;
-    uint8_t r_grip_g;
-    uint8_t r_grip_b;
-    uint8_t buttons_r;
-    uint8_t buttons_g;
-    uint8_t buttons_b;
+    union
+    {
+        struct
+        {
+            
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } body;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } l_grip;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } r_grip;
+
+    union
+    {
+        struct
+        {
+            uint8_t b;
+            uint8_t g;
+            uint8_t r;
+            uint8_t reserved;
+        };
+        uint32_t hex;
+    } buttons;
 } ns_colordata_s;
 
 typedef struct

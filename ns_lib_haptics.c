@@ -48,6 +48,14 @@ static ns_haptics_packet_raw_s _ns_raw_state = {0};
 #define AMPLITUDE_INTERVAL       0.03125f
 #define STARTING_AMPLITUDE_FLOAT -7.9375f
 
+/*
+ * Build the library's reference curves once at init time.
+ *
+ * These tables serve two roles:
+ *   1) optional float conversion for tooling / software playback
+ *   2) source data for precomputed fixed-point tables used by hardware-specific
+ *      playback engines
+ */
 void _ns_haptics_build_raw_tables(ns_haptics_tables_s *out)
 {
     if (out == NULL)
@@ -76,6 +84,11 @@ static uint64_t _ns_haptic_packet_counter;
 
 static void _ns_haptics_install_builtin_tables(void);
 
+/*
+ * Host amplitude indices do not map linearly to the exp2 envelope table.
+ * This helper collapses the protocol's piecewise encoding into a single
+ * 0..255 lookup row so the rest of the code can treat amplitude uniformly.
+ */
 uint8_t _ns_haptics_host_amp_index_to_exp_lut_index(uint8_t host_amp_idx)
 {
     unsigned i = host_amp_idx & 127u;
@@ -421,6 +434,11 @@ static void _haptics_decode_type_4(const ns_lib_haptic_wire_u *encoded, ns_hapti
 
 static void _haptics_decode_samples_apply(const ns_lib_haptic_wire_u *encoded, ns_haptics_packet_raw_s *out)
 {
+    /*
+     * The host can encode rumble updates in a few compact wire formats.
+     * frame_count selects how many sub-samples are present; the remaining bits
+     * determine which decode path reconstructs the new cumulative state.
+     */
     switch (encoded->frame_count)
     {
         case 0:
@@ -479,6 +497,10 @@ void ns_haptics_init(void)
 
 void ns_haptics_convert_raw_to_processed(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out)
 {
+    /*
+     * Keep the raw packet format cheap and hardware-friendly at ingest time,
+     * then offer this helper for firmware that wants float reference values.
+     */
     for(int i = 0; i < 3; i++)
     {
         out->samples[i].hi_amplitude = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].hi_amplitude_idx);
@@ -495,7 +517,7 @@ void ns_haptics_rumble_translate(const uint8_t *data)
      * Main integration path:
      *   1) receive raw 4-byte rumble word from host
      *   2) decode into _ns_raw_state.samples[0..2] (INDEXES ONLY)
-     *   3) call ns_set_haptic_indices_cb(samples, sample_count)
+     *   3) call ns_api_hook_set_haptic_packet_raw(&_ns_raw_state)
      *
      * sample_count is 0..3 and each sample carries:
      *   hi_amplitude_idx, lo_amplitude_idx, hi_frequency_idx, lo_frequency_idx
@@ -520,4 +542,33 @@ void ns_haptics_rumble_translate(const uint8_t *data)
 
     // Calls user space function to set haptic samples
     ns_api_hook_set_haptic_packet_raw(&_ns_raw_state);
+}
+
+void ns_haptics_generate_fixedpoint_frequency_step_tables(uint16_t shift, uint16_t sine_table_width, uint16_t sample_rate_hz,
+    uint16_t hi_out[NS_LIB_HAPTICS_FREQ_LUT_LEN], uint16_t lo_out[NS_LIB_HAPTICS_FREQ_LUT_LEN])
+{
+    /* Convert Hz into fixed-point wavetable phase increments ahead of time. */
+    for(int i = 0; i < NS_LIB_HAPTICS_FREQ_LUT_LEN; i++)
+    {
+        float increment;
+        increment = (_ns_tables.frequency_hz_hi[i] * (float)sine_table_width) / (float)sample_rate_hz;
+        hi_out[i] = (uint16_t)(increment * (float)shift + 0.5f);
+
+        increment = (_ns_tables.frequency_hz_lo[i] * (float)sine_table_width) / (float)sample_rate_hz;
+        lo_out[i] = (uint16_t)(increment * (float)shift + 0.5f);
+    }
+}
+
+void ns_haptics_generate_fixedpoint_amplitude_multiplier_table(uint16_t shift, uint16_t out[NS_LIB_HAPTICS_AMP_LUT_LEN])
+{
+    /*
+     * Quantize the float envelope table once so the playback engine can index
+     * directly into a fixed-point gain value at runtime.
+     */
+    for(int i = 0; i < NS_LIB_HAPTICS_AMP_LUT_LEN; i++)
+    {
+        uint16_t tmp = (uint16_t)(_ns_tables.amplitude_linear[i] * (float)shift);
+        if(_ns_tables.amplitude_linear[i]>0 && !tmp) tmp = 1;
+        out[i] = tmp;
+    }
 }

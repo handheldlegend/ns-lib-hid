@@ -50,11 +50,48 @@ bool ns_api_generate_inputreport(uint8_t data[64]);
 void ns_api_output_tunnel(const uint8_t *data, uint16_t len);
 
 /**
- * @brief Decoded HD-rumble index tuples callback (weak, user-overridable).
- * @param pairs Up to three decoded samples (float-only values).
- * @param pair_count Number of valid entries in @p pairs (0..3).
+ * @brief Convert one decoded haptics packet from table indices into float values.
+ *
+ * The raw packet delivered by @ref ns_api_hook_set_haptic_packet_raw contains
+ * lookup-table indices only. This helper resolves those indices into the
+ * library's reference amplitude and frequency values, which is useful for
+ * debug tooling, software synthesis, or actuator backends that prefer float
+ * units over raw indices.
+ *
+ * @param in Source raw packet containing decoded indices.
+ * @param out Destination packet receiving processed values.
  */
 void ns_api_convert_haptic_packet(ns_haptics_packet_raw_s *in, ns_haptics_packet_processed_s *out);
+
+/**
+ * @brief Generate fixed-point hi/lo frequency step tables for hardware playback.
+ *
+ * This converts the library's built-in frequency reference tables into phase
+ * increments for a DDS or wavetable-style synthesizer. @p shift is the
+ * fixed-point scale factor used by the playback engine (for example
+ * `1u << 12` for Q12), @p sine_table_width is the wavetable length, and
+ * @p sample_rate_hz is the PCM update rate.
+ *
+ * @param shift Fixed-point scale factor applied to each phase increment.
+ * @param sine_table_width Number of samples in the oscillator wavetable.
+ * @param sample_rate_hz Output sample rate used by the playback engine.
+ * @param hi_out Output table for the high-band frequency indices.
+ * @param lo_out Output table for the low-band frequency indices.
+ */
+void ns_api_generate_fp_haptic_frequency_tables(uint16_t shift, uint16_t sine_table_width, uint16_t sample_rate_hz,
+    uint16_t hi_out[128], uint16_t lo_out[128]);
+
+/**
+ * @brief Generate a fixed-point amplitude multiplier table for haptic playback.
+ *
+ * The returned values are scaled by @p shift so firmware can map a decoded
+ * amplitude index directly into a mixer or PWM gain without doing float math
+ * during the real-time audio/haptics path.
+ *
+ * @param shift Fixed-point scale factor, typically `1u << Q`.
+ * @param out Output table indexed by decoded amplitude row.
+ */
+void ns_api_generate_fp_amplitude_multiplier_table(uint16_t shift, uint16_t out[256]);
 
 /* --- API Platform Hook Functions --- */
 
@@ -78,9 +115,18 @@ void ns_api_hook_get_time_ms(uint64_t *ms);
 uint8_t ns_api_hook_get_random_u8(void);
 
 /**
- * @brief Decoded HD-rumble index tuples callback (weak, user-overridable).
- * @param pairs Up to three decoded samples (index-only values).
- * @param pair_count Number of valid entries in @p pairs (0..3).
+ * @brief Receive the most recent decoded HD-rumble packet (weak, user-overridable).
+ *
+ * Called immediately when a host OUT report containing rumble data is
+ * ingested. @p packet->state holds the current cumulative hi/lo index state
+ * and @p packet->samples[0..sample_count-1] contains up to three sequential
+ * sub-samples from the current host packet.
+ *
+ * The values are lookup-table indices, not Hz or linear gain. Firmware may
+ * either consume them directly with precomputed fixed-point tables or call
+ * @ref ns_api_convert_haptic_packet when float values are more convenient.
+ *
+ * @param packet Decoded raw haptics packet; ignored if NULL.
  */
 void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet);
 
@@ -127,8 +173,12 @@ void ns_api_hook_get_imu(ns_gyrodata_s *out);
 void ns_api_hook_get_quaternion(ns_quaternion_s *out);
 
 /**
- * @brief Fill packed input byte groups when needed (weak, user-overridable).
- * @param out Output button/stick raw bytes.
+ * @brief Fill logical button/stick state for report generation (weak, user-overridable).
+ *
+ * Provide button bits and unpacked stick positions in @ref ns_input_s. The
+ * library packs those values into the Switch report layout internally.
+ *
+ * @param out Output input state structure.
  */
 void ns_api_hook_get_input(ns_input_s *out);
 
