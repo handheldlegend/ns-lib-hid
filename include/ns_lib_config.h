@@ -30,9 +30,9 @@
 extern "C" {
 #endif
 
-void ns_device_fw_version(uint8_t *upper, uint8_t *lower);
+void ns_config_get_fw_version(uint8_t *upper, uint8_t *lower);
 
-void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
+void ns_config_get_devtype_bytes(uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
                                            uint8_t *snes_region_byte);
 
 /**
@@ -41,7 +41,7 @@ void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uin
  * @param cfg Candidate configuration (may be NULL).
  * @return `NS_CONFIG_OK` if usable; `NS_CONFIG_INVALID_ARG` or `NS_CONFIG_NOT_CONFIGURED` otherwise.
  */
-ns_config_status_t ns_device_config_validate(const ns_device_config_s *cfg);
+ns_config_status_t ns_config_validate(const ns_device_config_s *cfg);
 
 /**
  * @brief Replace the library’s stored configuration (copy).
@@ -51,24 +51,27 @@ ns_config_status_t ns_device_config_validate(const ns_device_config_s *cfg);
  * @param cfg Valid configuration (same rules as @ref ns_device_config_validate).
  * @return `NS_CONFIG_OK` on success; validation status otherwise.
  */
-ns_config_status_t ns_device_config_set(const ns_device_config_s *cfg);
+ns_config_status_t ns_config_set(const ns_device_config_s *cfg);
 
 /**
  * @brief Copy the current stored configuration into @p out.
  *
  * @param[out] out Destination; no-op if NULL.
  */
-void ns_device_config_get(ns_device_config_s *out);
+void ns_config_get(ns_device_config_s *out);
 
 /** @brief Clear stored configuration and mark not ready. */
-void ns_device_config_reset(void);
+int ns_config_get_ready(void);
 
-/**
- * @brief Nonzero after a successful @ref ns_device_config_set.
- *
- * @return 1 if ready, 0 otherwise.
- */
-int ns_device_config_is_ready(void);
+float ns_config_get_gyro_rpl(void);
+
+void ns_config_get_device_mac(uint8_t out[6]);
+
+void ns_config_get_host_mac(uint8_t out[6]);
+
+void ns_config_set_host_mac(uint8_t out[6]);
+
+ns_transport_t ns_config_get_transport(void);
 
 #ifdef __cplusplus
 }

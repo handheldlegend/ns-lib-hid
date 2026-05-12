@@ -27,19 +27,19 @@ static ns_device_config_s s_ns_device_config;
 static uint8_t s_ns_config_ready;
 static const float NS_CFG_DEFAULT_GYRO_FS_DPS = 2000.0f;
 
-void ns_device_fw_version(uint8_t *upper, uint8_t *lower)
+void ns_config_get_fw_version(uint8_t *upper, uint8_t *lower)
 {
     *upper = 0x04;
     *lower = 0x33;
 }
 
-void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
+void ns_config_get_devtype_bytes(uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_byte,
                                            uint8_t *snes_region_byte)
 {
     *color_byte = 0x01;
     *snes_region_byte = 0x00;
 
-    switch (t)
+    switch (s_ns_device_config.type)
     {
     case NS_DEVTYPE_JOYCON_R:
         *id_hi = 0x01;
@@ -93,7 +93,7 @@ void ns_device_devtype_bytes(ns_devtype_t t, uint8_t *id_hi, uint8_t *id_lo, uin
     }
 }
 
-ns_config_status_t ns_device_config_validate(const ns_device_config_s *cfg)
+ns_config_status_t ns_config_validate(const ns_device_config_s *cfg)
 {
     if (!cfg)
     {
@@ -110,9 +110,9 @@ ns_config_status_t ns_device_config_validate(const ns_device_config_s *cfg)
     return NS_CONFIG_OK;
 }
 
-ns_config_status_t ns_device_config_set(const ns_device_config_s *cfg)
+ns_config_status_t ns_config_set(const ns_device_config_s *cfg)
 {
-    ns_config_status_t st = ns_device_config_validate(cfg);
+    ns_config_status_t st = ns_config_validate(cfg);
     if (st != NS_CONFIG_OK)
     {
         return st;
@@ -128,7 +128,13 @@ ns_config_status_t ns_device_config_set(const ns_device_config_s *cfg)
     return NS_CONFIG_OK;
 }
 
-void ns_device_config_get(ns_device_config_s *out)
+void ns_config_reset(void)
+{
+    memset(&s_ns_device_config, 0, sizeof(s_ns_device_config));
+    s_ns_config_ready = 0u;
+}
+
+void ns_config_get(ns_device_config_s *out)
 {
     if (!out)
     {
@@ -137,14 +143,32 @@ void ns_device_config_get(ns_device_config_s *out)
     memcpy(out, &s_ns_device_config, sizeof(*out));
 }
 
-void ns_device_config_reset(void)
-{
-    memset(&s_ns_device_config, 0, sizeof(s_ns_device_config));
-    s_ns_config_ready = 0u;
-}
-
-int ns_device_config_is_ready(void)
+int ns_config_get_ready(void)
 {
     return (int)s_ns_config_ready;
 }
 
+float ns_config_get_gyro_rpl(void)
+{
+    return s_ns_device_config.gyro_rad_per_lsb;
+}
+
+void ns_config_get_device_mac(uint8_t out[6])
+{
+    memcpy(out, s_ns_device_config.device_mac, 6);
+}
+
+void ns_config_get_host_mac(uint8_t out[6])
+{
+    memcpy(out, s_ns_device_config.host_mac, 6);
+}
+
+void ns_config_set_host_mac(uint8_t out[6])
+{
+    memcpy(s_ns_device_config.host_mac, out, 6);
+}
+
+ns_transport_t ns_config_get_transport(void)
+{
+    return s_ns_device_config.transport;
+}

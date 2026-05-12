@@ -82,7 +82,7 @@ uint8_t ns_api_hook_get_random_u8(void);
  * @param pairs Up to three decoded samples (index-only values).
  * @param pair_count Number of valid entries in @p pairs (0..3).
  */
-void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s packet);
+void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet);
 
 /**
  * @brief Host-set player LED callback (weak, user-overridable).
@@ -131,30 +131,6 @@ void ns_api_hook_get_quaternion(ns_quaternion_s *out);
  * @param out Output button/stick raw bytes.
  */
 void ns_api_hook_get_input(ns_input_s *out);
-
-/**
- * @brief Get stored USB/Bluetooth link key (weak, user-overridable).
- *
- * @param out Output buffer for a 16-byte link key.
- * @return true when the key is available, false otherwise.
- */
-bool ns_api_hook_get_link_key(uint8_t out[16]);
-
-/**
- * @brief Get the gamepad MAC address (weak, user-overridable).
- *
- * @param out Output buffer for a 6-byte MAC address.
- * @return true when the MAC address is available, false otherwise.
- */
-bool ns_api_hook_get_gamepad_mac(uint8_t out[6]);
-
-/**
- * @brief Get the target host MAC address (weak, user-overridable).
- *
- * @param out Output buffer for a 6-byte MAC address.
- * @return true when the MAC address is available, false otherwise.
- */
-bool ns_api_hook_get_host_mac(uint8_t out[6]);
 
 #ifdef __cplusplus
 }

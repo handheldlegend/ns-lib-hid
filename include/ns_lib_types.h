@@ -346,6 +346,37 @@ typedef struct{
 } ns_usb_device_descriptor_t;
 #pragma pack(pop)
 
+/** One raw time slice: indices into ns_lib_haptics_tables_s (amplitude rows / frequency rows). */
+typedef struct
+{
+    uint8_t hi_amplitude_idx;
+    uint8_t lo_amplitude_idx;
+    uint8_t hi_frequency_idx;
+    uint8_t lo_frequency_idx;
+} ns_haptics_sample_raw_s;
+
+typedef struct
+{
+    uint8_t sample_count;
+    ns_haptics_sample_raw_s state;
+    ns_haptics_sample_raw_s samples[3];
+} ns_haptics_packet_raw_s;
+
+/** Floats derived from the reference tables. */
+typedef struct
+{
+    float hi_amplitude;
+    float lo_amplitude;
+    float hi_frequency_hz;
+    float lo_frequency_hz;
+} ns_haptics_processed_s;
+
+typedef struct
+{
+    uint8_t sample_count;
+    ns_haptics_processed_s samples[3];
+} ns_haptics_packet_processed_s;
+
 #ifdef __cplusplus
 }
 #endif

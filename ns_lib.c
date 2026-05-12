@@ -17,11 +17,11 @@
  */
 
 #include "ns_lib.h"
-#include "ns_lib_protocol.h"
+#include "ns_lib_protocol.h"                                                    
 
 ns_config_status_t ns_api_init(const ns_device_config_s *cfg)
 {
-    ns_config_status_t st = ns_device_config_set(cfg);
+    ns_config_status_t st = ns_config_set(cfg);
     if (st != NS_CONFIG_OK)
     {
         return st;
@@ -54,6 +54,12 @@ void ns_api_convert_haptic_packet(ns_haptics_packet_raw_s *in, ns_haptics_packet
     ns_haptics_convert_raw_to_processed(in, out);
 }
 
+void ns_api_motion_update_quaternion(ns_quaternion_s *state, ns_gyrodata_s *sample)
+{
+    static ns_motion_quat_integrator_s integrator = {0};
+    
+}
+
 /*
  * Platform hooks (declared in ns_lib_api.h): weak definitions — firmware should supply strong replacements.
  */
@@ -75,9 +81,9 @@ __attribute__((weak)) uint8_t ns_api_hook_get_random_u8(void)
     return (uint8_t)(s >> 8);
 }
 
-__attribute__((weak)) void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s packet)
+__attribute__((weak)) void ns_api_hook_set_haptic_packet_raw(ns_haptics_packet_raw_s *packet)
 {
-    (void)packet;
+    (void)&packet;
 }
 
 __attribute__((weak)) void ns_api_hook_set_led(int player_leds)
@@ -95,12 +101,6 @@ __attribute__((weak)) void ns_api_hook_set_usbpair(ns_usbpair_s pairing_data)
     (void)pairing_data;
 }
 
-__attribute__((weak)) void ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode)
-{
-    (void)imu_mode;
-}
-
-
 __attribute__((weak)) void ns_api_hook_get_powerstatus(ns_powerstatus_s *out)
 {
     if (!out)
@@ -113,6 +113,11 @@ __attribute__((weak)) void ns_api_hook_get_powerstatus(ns_powerstatus_s *out)
     out->connection = 1;
     out->charging = 0;
     out->reserved = 0;
+}
+
+__attribute__((weak)) void ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode)
+{
+    (void)imu_mode;
 }
 
 __attribute__((weak)) void ns_api_hook_get_imu(ns_gyrodata_s *out)
@@ -145,22 +150,4 @@ __attribute__((weak)) void ns_api_hook_get_input(ns_input_s *out)
     out->ls_y = 2048;
     out->rs_x = 2048;
     out->rs_y = 2048;
-}
-
-__attribute__((weak)) bool ns_api_hook_get_link_key(uint8_t out[16])
-{
-    (void)&out;
-    return false;
-}
-
-__attribute__((weak)) bool ns_api_hook_get_gamepad_mac(uint8_t out[6])
-{
-    (void)&out;
-    false;
-}
-
-__attribute__((weak)) bool ns_api_hook_get_host_mac(uint8_t out[6])
-{
-    (void)&out;
-    return false;
 }

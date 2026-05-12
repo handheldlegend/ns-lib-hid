@@ -58,7 +58,7 @@ typedef struct
 {
     uint16_t len;
     uint8_t data[NS_LIB_PROTOCOL_MAX_PACKET_BYTES];
-} ns_lib_protocol_pending_packet_s;
+} ns_protocol_pending_packet_s;
 
 typedef struct
 {
@@ -66,27 +66,20 @@ typedef struct
     bool init_sent;
     uint8_t reporting_mode;
     uint8_t link_key[16];
-} ns_lib_protocol_sm_s;
+} ns_protocol_sm_s;
 
-static ns_lib_protocol_sm_s _protocol_sm = {.imu_mode = NS_IMU_OFF, .init_sent = false, .reporting_mode = NS_LIB_PROTOCOL_IN_REPORT_ID_30};
+static ns_protocol_sm_s _protocol_sm = {.imu_mode = NS_IMU_OFF, .init_sent = false, .reporting_mode = NS_LIB_PROTOCOL_IN_REPORT_ID_30};
 
-static ns_lib_protocol_pending_packet_s s_ns_lib_protocol_queue[NS_LIB_PROTOCOL_CMD_FIFO_DEPTH];
+static ns_protocol_pending_packet_s s_ns_lib_protocol_queue[NS_LIB_PROTOCOL_CMD_FIFO_DEPTH];
 static uint8_t s_ns_lib_protocol_queue_head = 0u;
 static uint8_t s_ns_lib_protocol_queue_tail = 0u;
 static uint8_t s_ns_lib_protocol_queue_count = 0u;
 
-static void _ns_protocol_get_device_mac(uint8_t mac[6])
-{
-    ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
-    memcpy(mac, cfg.device_mac, 6);
-}
-
-static void _ns_protocol_generate_ltk(void)
+static void _ns_protocol_generate_linkkey(void)
 {
     for (uint8_t i = 0; i < 16; i++)
     {
-        _protocol_sm.link_key[i] = ns_get_random_u8();
+        _protocol_sm.link_key[i] = ns_api_hook_get_random_u8();
     }
 }
 
@@ -103,7 +96,7 @@ static void _ns_protocol_set_command(uint8_t command, uint8_t *target)
 static void _ns_protocol_set_timer(uint8_t *target)
 {
     static uint64_t this_ms = 0;
-    ns_get_time_ms(&this_ms);
+    ns_api_hook_get_time_ms(&this_ms);
 
     static uint64_t ns_lib_protocol_timer = 0;
     ns_lib_protocol_timer += this_ms;
@@ -117,21 +110,18 @@ static void _ns_protocol_set_timer(uint8_t *target)
 static void _ns_protocol_set_battconn(uint8_t *target)
 {
     ns_powerstatus_s ps = {0};
-    ns_get_powerstatus_cb(&ps);
+    ns_api_hook_get_powerstatus(&ps);
     target[NS_PROTOCOL_IN_IDX_BATTCONN] = ps.val;
 }
 
 static void _ns_protocol_set_devinfo(uint8_t *target)
 {
-    ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
-
     uint8_t fw_hi, fw_lo;
-    ns_device_fw_version(&fw_hi, &fw_lo);
+    ns_config_get_fw_version(&fw_hi, &fw_lo);
 
     /* Factory configuration and calibration */
     uint8_t factory_id_hi, factory_id_lo, factory_color_byte, factory_snes_region_byte;
-    ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
+    ns_config_get_devtype_bytes(&factory_id_hi, &factory_id_lo, &factory_color_byte,
                             &factory_snes_region_byte);
 
     target[NS_PROTOCOL_IN_IDX_PAYLOAD + 0] = fw_hi;
@@ -139,7 +129,7 @@ static void _ns_protocol_set_devinfo(uint8_t *target)
     target[NS_PROTOCOL_IN_IDX_PAYLOAD + 2] = factory_id_hi;
     target[NS_PROTOCOL_IN_IDX_PAYLOAD + 3] = factory_id_lo;
 
-    memcpy(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4], cfg.device_mac, 6);
+    ns_config_get_device_mac(&target[NS_PROTOCOL_IN_IDX_PAYLOAD + 4]);
 
     // I don't know what these do :)
     target[NS_PROTOCOL_IN_IDX_PAYLOAD + 10] = 0x01;
@@ -158,9 +148,9 @@ static void _ns_protocol_set_subtriggertime(uint16_t time_10_ms, uint8_t *target
     }
 }
 
-static void _ns_protocol_set_inputdata(ns_inputdata_s *in, uint8_t *target)
+static void _ns_protocol_set_inputdata(ns_input_s *in, uint8_t *target)
 {
-    ns_inputdata_packed_s packed = {
+    ns_input_packed_s packed = {
         .left_buttons = in->left_buttons,
         .shared_buttons = in->shared_buttons,
         .right_buttons = in->right_buttons,
@@ -179,7 +169,7 @@ static void _ns_protocol_info_set_mac(uint8_t *target)
     target[3] = 3u;
 
     uint8_t mac[6];
-    _ns_protocol_get_device_mac(mac);
+    ns_config_get_device_mac(mac);
 
     target[4] = mac[5];
     target[5] = mac[4];
@@ -226,7 +216,7 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
     static uint8_t host_mac[6] = {0};
 
     ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
+    ns_config_get(&cfg);
 
     uint8_t in_code = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
 
@@ -260,7 +250,7 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         case 2:
         target[NS_PROTOCOL_IN_IDX_PAYLOAD] = 2;
         // Generate link key
-        _ns_protocol_generate_ltk();
+        _ns_protocol_generate_linkkey();
         // Copy XOR'd link key
         for (int i = 0; i < 16; i++)
         {
@@ -268,8 +258,7 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         }
 
         // Update runtime config host mac
-        memcpy(cfg.host_mac, host_mac, 6);
-        ns_device_config_set(&cfg);
+        ns_config_set_host_mac(host_mac);
 
         // Save our data to gamepad
         ns_usbpair_s pair = {0};
@@ -279,7 +268,7 @@ static void _ns_protocol_pairing_set(const uint8_t *in, uint8_t *target)
         // Send user-space callback
         // To save link key for 
         // Host MAC address
-        ns_set_usbpair_cb(pair);
+        ns_api_hook_set_usbpair(pair);
         return;
 
         // Console indicates that it received
@@ -339,15 +328,15 @@ static void _ns_protocol_set_standardreport(uint8_t *out)
     static ns_mode_2_s mode_2_data = {0};
     static ns_quaternion_s quat = {0};
 
-    static ns_inputdata_s input = {0};
-    ns_get_inputdata_cb(&input);
+    static ns_input_s input = {0};
+    ns_api_hook_get_input(&input);
     _ns_protocol_set_inputdata(&input, out);
 
     switch (_protocol_sm.imu_mode)
     {
     case NS_IMU_RAW:
         // Callback to get user gyro data
-        ns_get_imu_standard_cb(&gyro);
+        ns_api_hook_get_imu(&gyro);
         // Group 1
         out[NS_PROTOCOL_IDX_IMU_DATA_START] = gyro.ay_8l; // Y-axis
         out[14] = gyro.ay_8h;
@@ -369,7 +358,7 @@ static void _ns_protocol_set_standardreport(uint8_t *out)
     case NS_IMU_QUAT:
     {
         // Callback to get user quaternion data
-        ns_get_imu_quaternion_cb(&quat);
+        ns_api_hook_get_quaternion(&quat);
         // Pack our quaternion data
         ns_motion_pack_quat(&quat, &mode_2_data);
         // Copy to output buffer
@@ -391,8 +380,8 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
     _ns_protocol_set_timer(out);
     _ns_protocol_set_battconn(out);
 
-    static ns_inputdata_s input = {0};
-    ns_get_inputdata_cb(&input);
+    static ns_input_s input = {0};
+    ns_api_hook_get_input(&input);
     _ns_protocol_set_inputdata(&input, out);
 
     _ns_protocol_set_command(command, out);
@@ -404,7 +393,7 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
         break;
     case NS_LIB_PROTOCOL_ENABLE_IMU:
         _protocol_sm.imu_mode = in[NS_PROTOCOL_OUT_IDX_SUBCMD_ARG];
-        ns_set_imumode_cb(_protocol_sm.imu_mode);
+        ns_api_hook_set_imu_mode(_protocol_sm.imu_mode);
         _ns_protocol_set_ack(0x80, out);
         break;
     case NS_LIB_PROTOCOL_SET_PAIRING:
@@ -479,7 +468,7 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
             break;
         }
 
-        ns_set_led_cb(set_num);
+        ns_api_hook_set_led(set_num);
     }
     break;
     default:
@@ -488,7 +477,7 @@ static void _ns_protocol_command_handler(const uint8_t *in, uint8_t *out)
     }
 }
 
-static bool _ns_protocol_outputqueue_pop(ns_lib_protocol_pending_packet_s *out_packet)
+static bool _ns_protocol_outputqueue_pop(ns_protocol_pending_packet_s *out_packet)
 {
     if (out_packet == NULL || s_ns_lib_protocol_queue_count == 0u)
     {
@@ -526,10 +515,7 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
     {
         // Check our protocol. We only generate an INIT message
         // if we are using USB
-        ns_device_config_s cfg = {0};
-        ns_device_config_get(&cfg);
-
-        if (cfg.transport == NS_TRANSPORT_USB)
+        if (ns_config_get_transport() == NS_TRANSPORT_USB)
         {
             if (_ns_protocol_generate_init(out))
             {
@@ -545,7 +531,7 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
         }
     }
 
-    ns_lib_protocol_pending_packet_s pending = {.len = 0};
+    ns_protocol_pending_packet_s pending = {.len = 0};
 
     if (_ns_protocol_outputqueue_pop(&pending))
     {
@@ -607,7 +593,7 @@ void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len)
         // anything else
         if (in[NS_PROTOCOL_OUT_IDX_SUBCMD] == NS_LIB_PROTOCOL_SET_HCI)
         {
-            ns_set_power_cb(true);
+            ns_api_hook_set_power(true);
             return;
         }
 
@@ -626,7 +612,7 @@ void ns_protocol_process_outputreport(const uint8_t *in, uint16_t len)
         return;
     }
 
-    ns_lib_protocol_pending_packet_s *slot = &s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_tail];
+    ns_protocol_pending_packet_s *slot = &s_ns_lib_protocol_queue[s_ns_lib_protocol_queue_tail];
     slot->len = len;
     memcpy(slot->data, in, len);
 

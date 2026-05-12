@@ -34,8 +34,6 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
      *   0x60xx: factory/config/calibration/color/sensor params
      *   0x80xx: user calibration region
      */
-    ns_device_config_s cfg = {0};
-    ns_device_config_get(&cfg);
 
     switch (offset_address)
     {
@@ -105,8 +103,11 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
 
         /* Factory configuration and calibration */
         uint8_t factory_id_hi, factory_id_lo, factory_color_byte, factory_snes_region_byte;
-        ns_device_devtype_bytes(cfg.type, &factory_id_hi, &factory_id_lo, &factory_color_byte,
+        ns_config_get_devtype_bytes(&factory_id_hi, &factory_id_lo, &factory_color_byte,
                                        &factory_snes_region_byte);
+
+        ns_device_config_s cfg;
+        ns_config_get(&cfg);
 
         switch (address)
         {
