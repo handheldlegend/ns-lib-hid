@@ -167,6 +167,34 @@ typedef union ns_powerstatus_s
         uint8_t bat_lvl : 3; /**< Battery gauge level (0–7; HOJA fuel gauge uses 1–4 for quartiles). */
     };
     uint8_t val; /**< Packed byte written to input report @c [1]. */
+} ns_batstat_s;
+
+typedef enum
+{
+    NS_POWERSRC_BATTERY = 0,
+    NS_POWERSRC_EXTERNAL = 1
+} ns_power_source_t;
+
+typedef enum
+{
+    NS_CHARGING_IDLE = 0,
+    NS_CHARGING_ACTIVE = 1,
+} ns_charging_t;
+
+typedef enum
+{
+    NS_BATLVL_EMPTY = 0,
+    NS_BATLVL_CRITICAL = 1,
+    NS_BATLVL_LOW = 2,
+    NS_BATLVL_MED = 3,
+    NS_BATLVL_FULL = 4,
+} ns_batlvl_t;
+
+typedef struct
+{
+    ns_power_source_t power_source; 
+    ns_charging_t charging_status; 
+    ns_batlvl_t battery_level; 
 } ns_powerstatus_s;
 
 /** @brief Single IMU sample (gyroscope + accelerometer). */

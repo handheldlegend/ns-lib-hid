@@ -111,7 +111,13 @@ static void _ns_protocol_set_battconn(uint8_t *target)
 {
     ns_powerstatus_s ps = {0};
     ns_api_hook_get_powerstatus(&ps);
-    target[NS_PROTOCOL_IN_IDX_BATTCONN] = ps.val;
+
+    ns_batstat_s stat = {0};
+    stat.bat_lvl = ps.battery_level > NS_BATLVL_FULL ? NS_BATLVL_FULL : ps.battery_level;
+    stat.charging = ps.charging_status > NS_CHARGING_ACTIVE ? NS_CHARGING_ACTIVE : ps.charging_status;
+    stat.power_source = ps.power_source > NS_POWERSRC_EXTERNAL ? NS_POWERSRC_EXTERNAL : ps.power_source;
+
+    target[NS_PROTOCOL_IN_IDX_BATTCONN] = stat.val;
 }
 
 static void _ns_protocol_set_devinfo(uint8_t *target)

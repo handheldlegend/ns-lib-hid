@@ -119,11 +119,9 @@ __attribute__((weak)) void ns_api_hook_get_powerstatus(ns_powerstatus_s *out)
         return;
     }
     memset(out, 0, sizeof(*out));
-    out->bat_lvl = 4;
-    out->power_source = 1;
-    out->connection = 1;
-    out->charging = 0;
-    out->reserved = 0;
+    out->battery_level = NS_BATLVL_FULL;
+    out->power_source = NS_POWERSRC_EXTERNAL;
+    out->charging_status = NS_CHARGING_IDLE;
 }
 
 __attribute__((weak)) void ns_api_hook_set_imu_mode(ns_imu_mode_t imu_mode)
