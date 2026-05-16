@@ -505,8 +505,8 @@ void ns_haptics_convert_raw_to_processed(ns_haptics_packet_raw_s *in, ns_haptics
     {
         out->samples[i].hi_amplitude = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].hi_amplitude_idx);
         out->samples[i].lo_amplitude = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].lo_amplitude_idx);
-        out->samples[i].hi_frequency_hz = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].hi_frequency_idx);
-        out->samples[i].lo_frequency_hz = _ns_haptics_exp_lut_index_to_amplitude_linear(in->samples[i].lo_frequency_idx);
+        out->samples[i].hi_frequency_hz = _ns_tables.frequency_hz_hi[in->samples[i].hi_frequency_idx];
+        out->samples[i].lo_frequency_hz = _ns_tables.frequency_hz_lo[in->samples[i].lo_frequency_idx];
     }
     out->sample_count = in->sample_count;
 }
