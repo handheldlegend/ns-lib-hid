@@ -41,11 +41,11 @@ void ns_config_get_devtype_bytes(uint8_t *id_hi, uint8_t *id_lo, uint8_t *color_
 
     switch (s_ns_device_config.type)
     {
-    case NS_DEVTYPE_JOYCON_R:
+    case NS_DEVTYPE_JOYCON_L:
         *id_hi = 0x01;
         *id_lo = 0x02;
         return;
-    case NS_DEVTYPE_JOYCON_L:
+    case NS_DEVTYPE_JOYCON_R:
         *id_hi = 0x02;
         *id_lo = 0x02;
         return;
