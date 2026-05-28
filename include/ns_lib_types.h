@@ -57,6 +57,7 @@ typedef enum
 } ns_imu_mode_t;
 
 /** @brief RGB LED channels for body, grips, and buttons (host-reported or local mirror). */
+#pragma pack(push, 1)
 typedef struct
 {
     union
@@ -108,11 +109,13 @@ typedef struct
         uint32_t hex;
     } buttons;
 } ns_colordata_s;
+#pragma pack(pop)
 
+#pragma pack(push, 1)
 typedef struct
 {
-    ns_devtype_t type;
-    ns_transport_t transport;
+    uint8_t type; // ns_devtype_t
+    uint8_t transport; // ns_transport_t
     /** Local controller MAC address used by protocol responses / pairing data. */
     uint8_t device_mac[6];
     /** Paired host MAC address (optional for protocol/pairing flows). */
@@ -130,6 +133,9 @@ typedef struct
      */
     float gyro_rad_per_lsb;
 } ns_device_config_s;
+#pragma pack(pop)
+
+#define NS_DEVICE_CFG_LEN sizeof(ns_device_config_s)
 
 /**
  * @brief Result of configuration validation or operations that depend on a configured device.
