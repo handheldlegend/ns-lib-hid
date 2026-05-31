@@ -561,8 +561,7 @@ bool ns_protocol_generate_inputreport(uint8_t out[64])
             break;
 
         default:
-            return false;
-            break;
+            goto send_standard_report;
         }
         return true;
     }
