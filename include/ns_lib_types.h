@@ -27,6 +27,11 @@ extern "C" {
 
 typedef enum
 {
+    NS_INPUT_REPORT_ID_FULL = 0x30u,
+} ns_report_id_t;
+
+typedef enum
+{
     NS_DEVTYPE_UNDEFINED,
     NS_DEVTYPE_PROCON,
     NS_DEVTYPE_JOYCON_L,
