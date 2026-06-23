@@ -125,6 +125,8 @@ typedef struct
     uint8_t device_mac[6];
     /** Paired host MAC address (optional for protocol/pairing flows). */
     uint8_t host_mac[6];
+    /** Device Serial Number */
+    uint8_t device_serial[16];
     /** Body/grip/button colors used for SPI factory color pages. */
     ns_colordata_s colors;
     /**

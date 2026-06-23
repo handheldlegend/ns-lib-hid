@@ -113,7 +113,7 @@ uint8_t _ns_spi_getaddressdata(uint8_t offset_address, uint8_t address)
         {
         case 0x00 ... 0x0F:
             /* Stage 1 (0x6000): serial number block, 0xFF means disabled */
-            return 0xFF;
+            return cfg.device_serial[address];
 
         // ProCon  0x03 0x02
         // N64     0x0C 0x11 
